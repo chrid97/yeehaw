@@ -1,0 +1,4 @@
+# This is here because LazyVim uses rg or grep when searching files. 
+# This lets me ignore build and lib files from my search
+build
+lib
