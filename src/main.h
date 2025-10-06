@@ -10,6 +10,7 @@ typedef struct {
   float height;
   float width;
   Vector2 pos;
+  Vector2 velocity;
 } Entity;
 
 typedef struct {
