@@ -1,17 +1,19 @@
 #include "main.h"
 #include "raylib.h"
 #include <assert.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #define MAX_OBSTACLES 100
 
 const int VIRTUAL_WIDTH = 800;
 const int VIRTUAL_HEIGHT = 450;
-const int PLAYER_WIDTH = 50;
-const int PLAYER_HEIGHT = 40;
+const int PLAYER_WIDTH = 40;
+const int PLAYER_HEIGHT = 25;
 const int TILE_WIDTH = 100;
 const int TILE_HEIGHT = 50;
 
@@ -53,21 +55,27 @@ int main(void) {
   Entity player = {
       .width = PLAYER_WIDTH,
       .height = PLAYER_HEIGHT,
-      .pos = {.x = 0, .y = VIRTUAL_HEIGHT - PLAYER_HEIGHT},
+      .pos = {.x = 0, .y = VIRTUAL_HEIGHT / 2.0f},
       .velocity.x = 1,
       .velocity.y = 1,
   };
 
-  int map[90] = {0};
-
-  float worldOffset = 0.0f;
-  float worldSpeed = 300.0f;
-  float scroll = fmodf(worldOffset, VIRTUAL_WIDTH);
+  srand(time(NULL));
 
   Entity obstacles[MAX_OBSTACLES] = {0};
   for (int i = 0; i < MAX_OBSTACLES; i++) {
-    obstacles[i] = (Entity){.pos.x = i * 70, .pos.y = 340};
+    // int rand_x = rand() % VIRTUAL_WIDTH + VIRTUAL_WIDTH;
+    // int rand_y = rand() % VIRTUAL_HEIGHT;
+    // obstacles[i] = (Entity){
+    //     .pos.x = rand_x,
+    //     .pos.y = rand_y,
+    //     .width = 25,
+    //     .height = 25,
+    // };
   }
+
+  float spawn_timer = 2.0f;
+  float world_offset = 0;
   while (!WindowShouldClose()) {
     float dt = GetFrameTime();
     // Screen scaling
@@ -81,28 +89,67 @@ int main(void) {
     // --------------- //
     // ---- Input ---- //
     // --------------- //
+    world_offset += 100.0f * dt;
+    player.velocity = (Vector2){0};
     if (IsKeyDown(KEY_D)) {
-      player.velocity.x = player.velocity.x;
+      player.velocity.x = 1.0f;
     }
 
     if (IsKeyDown(KEY_A)) {
-      player.velocity.x = -player.velocity.x;
+      player.velocity.x = -1.0f;
     }
 
     if (IsKeyDown(KEY_W)) {
-      player.pos.y -= player.velocity.y;
+      player.velocity.y = -1.0f;
     }
 
     if (IsKeyDown(KEY_S)) {
-      player.pos.y += player.velocity.y;
+      player.velocity.y = 1.0f;
     }
-
-    player.pos.x += player.velocity.x;
 
     // ---------------- //
     // ---- Update ---- //
     // ---------------- //
-    worldOffset += worldSpeed * dt;
+    float move_speed = 100.0f;
+    player.pos.x += player.velocity.x * move_speed * dt;
+    player.pos.y += player.velocity.y * move_speed * dt;
+
+    spawn_timer -= dt;
+    if (spawn_timer < 0) {
+      spawn_timer = 0.0;
+    }
+    if (spawn_timer == 0.0) {
+      spawn_timer = 2.0f;
+      for (int i = 0; i < MAX_OBSTACLES; i++) {
+        if (!obstacles[i].is_active) {
+          obstacles[i].is_active = true;
+          obstacles[i].width = 25;
+          obstacles[i].height = 25;
+          obstacles[i].pos.x = world_offset + VIRTUAL_WIDTH + (rand() % 300);
+          obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
+          break;
+        }
+      }
+    }
+
+    for (int i = 0; i < MAX_OBSTACLES; i++) {
+      Entity *obstacle = &obstacles[i];
+      if (!obstacle->is_active) {
+        continue;
+      }
+
+      if (obstacle->pos.x + obstacle->width < world_offset) {
+        int rand_x = (world_offset + VIRTUAL_WIDTH) + rand() % 300;
+        int rand_y = rand() % VIRTUAL_HEIGHT;
+        obstacles[i] = (Entity){
+            .pos.x = rand_x,
+            .pos.y = rand_y,
+            .width = 25,
+            .height = 25,
+            .is_active = true,
+        };
+      }
+    }
 
     // ---------------- //
     // ----- Draw ----- //
@@ -110,70 +157,14 @@ int main(void) {
     BeginDrawing();
     ClearBackground((Color){235, 200, 150, 255});
 
-    // GROUND
-    // DrawRectangle(0, 250, VIRTUAL_WIDTH, 150, (Color){194, 178, 128, 255});
-    // for (int y = 250; y < 250 + 150; y += 50) {
-    //   for (int x = 0; x < VIRTUAL_WIDTH; x += 50) {
-    //     DrawRectangleLines(x, y, 50, 50, RED);
-    //   }
-    // }
-    //
-    // DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
-    //               BLUE);
+    DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
+                  BLUE);
+    for (int i = 0; i < MAX_OBSTACLES; i++) {
+      DrawRectangle(obstacles[i].pos.x - world_offset, obstacles[i].pos.y, 25,
+                    25, DARKGREEN);
+    }
 
-    // for (int i = 0; i < MAX_OBSTACLES; i++) {
-    //   DrawRectangle(obstacles[i].pos.x, obstacles[i].pos.y, 25, 60,
-    //   DARKGREEN);
-    // }
-    // CACTUS
-    // DrawRectangle(400, 260, 20, 60, DARKGREEN);
-    // DrawRectangle(400, 340, 20, 60, DARKGREEN);
-
-    // int start = screen_width / 2;
-    // // DrawRectangleLines(start, 0, TILE_WIDTH, TILE_HEIGHT, BLACK);
-    //
-    // Vector2 top = {.x = start + (TILE_WIDTH / 2), .y = 0};
-    // Vector2 right = {.x = start + TILE_WIDTH, .y = TILE_HEIGHT / 2};
-    // Vector2 left = {.x = start, .y = TILE_HEIGHT / 2};
-    // Vector2 bottom = {.x = start + TILE_WIDTH / 2, .y = TILE_HEIGHT};
-    //
-    // DrawTriangle(right, top, bottom, GRAY);
-    // DrawTriangle(top, left, bottom, GRAY);
-    // DrawLineV(top, left, BLACK);
-    // DrawLineV(top, right, BLACK);
-    // DrawLineV(bottom, left, BLACK);
-    // DrawLineV(bottom, right, BLACK);
-    //
-    // // DrawRectangleLines(start + TILE_WIDTH / 2, TILE_HEIGHT / 2,
-    // TILE_WIDTH,
-    // //                    TILE_HEIGHT, BLACK);
-    // Vector2 top2 = {.x = top.x + TILE_WIDTH / 2, .y = top.y + TILE_HEIGHT /
-    // 2}; Vector2 right2 = {.x = right.x + (TILE_WIDTH / 2),
-    //                   .y = right.y + TILE_HEIGHT / 2};
-    // Vector2 left2 = {.x = left.x + TILE_WIDTH / 2,
-    //                  .y = left.y + (TILE_HEIGHT / 2)};
-    // Vector2 bottom2 = {.x = bottom.x + TILE_WIDTH / 2,
-    //                    .y = bottom.y + (TILE_HEIGHT / 2)};
-    //
-    // DrawTriangle(right2, top2, bottom2, GRAY);
-    // DrawTriangle(top2, left2, bottom2, GRAY);
-    // DrawLineV(top2, left2, BLACK);
-    // DrawLineV(top2, right2, BLACK);
-    // DrawLineV(bottom2, left2, BLACK);
-    // DrawLineV(bottom2, right2, BLACK);
-
-    draw_tile((Vector2){.x = 0, .y = 0});
-
-    draw_tile((Vector2){.x = 1, .y = 0});
-    draw_tile((Vector2){.x = 2, .y = 0});
-
-    draw_tile((Vector2){.x = 0, .y = 1});
-    draw_tile((Vector2){.x = 0, .y = 2});
-
-    draw_tile((Vector2){.x = 1, .y = 1});
-    draw_tile((Vector2){.x = 2, .y = 2});
-    draw_tile((Vector2){.x = 2, .y = 1});
-
+    DrawFPS(0, 0);
     EndDrawing();
   }
 

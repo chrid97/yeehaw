@@ -11,6 +11,7 @@ typedef struct {
   float width;
   Vector2 pos;
   Vector2 velocity;
+  bool is_active;
 } Entity;
 
 typedef struct {
