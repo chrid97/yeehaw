@@ -96,6 +96,8 @@ int main(void) {
       .rotation = 0.0f,
       .zoom = 1.0f,
   };
+
+  float shake_timer = 0.0f;
   while (!WindowShouldClose()) {
     float dt = GetFrameTime();
 
@@ -189,16 +191,32 @@ int main(void) {
                                .width = obstacle->width,
                                .height = obstacle->height};
 
+      // Player takes damage
       if (CheckCollisionRecs(player_rect, object_rect) &&
           player.damage_cooldown <= 0) {
         player.current_health--;
         player.color = RED;
         player.damage_cooldown = 0.5f;
+        shake_timer = 0.5f;
       }
+    }
+
+    if (shake_timer > 0) {
+      shake_timer -= dt;
+      float offset_x = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+      float offset_y = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+      // (NOTE) magnitude can change based on how much damage you took or what
+      // you took damage from?
+      float shake_magnitude = 10.0f;
+      camera.target.x = camera.target.x + offset_x * shake_magnitude;
+      // camera.target.y = offset_y * shake_magnitude;
     }
 
     // Start over
     if (player.current_health <= 0) {
+      // (NOTE) probably move this stuff into game_state, then I can just write
+      // a function that takes game_state and updates all of these properties
+      // that I can also use at the start of the game
       player = (Entity){
           .width = PLAYER_WIDTH,
           .height = PLAYER_HEIGHT,
@@ -210,12 +228,17 @@ int main(void) {
           .color = BLUE,
           .damage_cooldown = 0,
       };
-
       for (int i = 0; i < MAX_OBSTACLES; i++) {
         obstacles[i] = (Entity){0};
       }
+      Camera2D camera = {
+          .target = player.pos,
+          .offset = (Vector2){50, VIRTUAL_HEIGHT / 2.0f},
+          .rotation = 0.0f,
+          .zoom = 1.0f,
+      };
+      shake_timer = 0.0f;
       spawn_timer = 2.0f;
-      camera.target = player.pos;
     }
 
     // ---------------- //
