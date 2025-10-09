@@ -31,7 +31,7 @@ const int TILE_HEIGHT = 50;
 
 // Player movement area
 // (NOTE) maybe I want to move this a bit lower? and make it smaller? shrugs
-float PLAYER_LOWER_BOUND_Y = VIRTUAL_HEIGHT * 0.5f;
+float PLAYER_LOWER_BOUND_Y = VIRTUAL_HEIGHT * 0.55f;
 float PLAYER_UPPER_BOUND_Y = VIRTUAL_HEIGHT * 0.85f;
 
 static Entity player;
@@ -143,7 +143,6 @@ void update_draw(void) {
                        PLAYER_UPPER_BOUND_Y - player.height);
 
   camera.target.x = floorf(player.pos.x);
-
   if (player.damage_cooldown > 0.0f) {
     player.damage_cooldown -= dt;
     player.color = RED;
@@ -175,7 +174,8 @@ void update_draw(void) {
 
     if (obstacle->pos.x + obstacle->width < camera.target.x) {
       int rand_x = (camera.target.x + VIRTUAL_WIDTH) + rand() % 300;
-      int rand_y = rand() % VIRTUAL_HEIGHT;
+      int rand_y =
+          random_betweenf(PLAYER_LOWER_BOUND_Y - 75, VIRTUAL_HEIGHT - 100);
       *obstacle = (Entity){
           .pos.x = rand_x,
           .pos.y = rand_y,
