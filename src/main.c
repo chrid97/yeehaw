@@ -21,11 +21,32 @@ const int PLAYER_HEIGHT = 25;
 const int TILE_WIDTH = 100;
 const int TILE_HEIGHT = 50;
 
+// Player movement area
+// (NOTE) maybe I want to move this a bit lower? and make it smaller? shrugs
+float PLAYER_LOWER_BOUND_Y = VIRTUAL_HEIGHT * 0.5f;
+float PLAYER_UPPER_BOUND_Y = VIRTUAL_HEIGHT * 0.85f;
+
 static Entity player;
 static Entity obstacles[MAX_OBSTACLES];
 static Camera2D camera;
 static float spawn_timer = 2.0f;
 static float shake_timer = 0.0f;
+
+/// inclusive
+int random_between(int min, int max) {
+  if (max <= min) {
+    return min;
+  }
+  return min + rand() % (max - min + 1);
+}
+
+int random_betweenf(float min, float max) {
+  if (max <= min) {
+    return min;
+  }
+  float scale = rand() / (float)RAND_MAX;
+  return min + scale * (max - min);
+}
 
 float clamp(float value, float min, float max) {
   if (value <= min) {
@@ -38,10 +59,14 @@ float clamp(float value, float min, float max) {
 }
 
 void init_game(void) {
+  float player_starting_y_position =
+      (PLAYER_LOWER_BOUND_Y +
+       (PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y) / 2.0f) -
+      PLAYER_HEIGHT / 2.0f;
   player = (Entity){
       .width = PLAYER_WIDTH,
       .height = PLAYER_HEIGHT,
-      .pos = {.x = 100, .y = VIRTUAL_HEIGHT / 2.0f},
+      .pos = {.x = 100, .y = player_starting_y_position},
       .velocity = {.x = 1, .y = 1},
       .current_health = 5,
       .max_health = 5,
@@ -55,7 +80,7 @@ void init_game(void) {
 
   camera = (Camera2D){
       .target = player.pos,
-      .offset = (Vector2){50, VIRTUAL_HEIGHT / 2.0f},
+      .offset = (Vector2){50, player_starting_y_position},
       .rotation = 0.0f,
       .zoom = 1.0f,
   };
@@ -81,15 +106,17 @@ void update_draw(void) {
   }
 
   // --- Update ---
-  float move_speed = 200.0f;
-  player.pos.x += player.velocity.x * move_speed * dt;
-  player.pos.y += player.velocity.y * move_speed * dt;
-  player.pos.y = clamp(player.pos.y, 0, VIRTUAL_HEIGHT - player.height);
+  player.pos.x += player.velocity.x * 700.0f * dt;
+  player.pos.y += player.velocity.y * 200.0f * dt;
+  player.pos.y = clamp(player.pos.y, PLAYER_LOWER_BOUND_Y,
+                       PLAYER_UPPER_BOUND_Y - player.height);
 
   camera.target.x = floorf(player.pos.x);
 
-  if (player.damage_cooldown > 0.0f)
+  if (player.damage_cooldown > 0.0f) {
     player.damage_cooldown -= dt;
+    player.color = RED;
+  }
 
   // Spawn obstacles periodically
   spawn_timer -= dt;
@@ -101,7 +128,9 @@ void update_draw(void) {
         obstacles[i].width = 25;
         obstacles[i].height = 25;
         obstacles[i].pos.x = camera.target.x + VIRTUAL_WIDTH + (rand() % 300);
-        obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
+        // obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
+        obstacles[i].pos.y = random_betweenf(PLAYER_LOWER_BOUND_Y - 100,
+                                             PLAYER_LOWER_BOUND_Y + 100);
         break;
       }
     }
@@ -137,7 +166,6 @@ void update_draw(void) {
     if (CheckCollisionRecs(player_rect, object_rect) &&
         player.damage_cooldown <= 0) {
       player.current_health--;
-      player.color = RED;
       player.damage_cooldown = 0.5f;
       shake_timer = 0.5f;
     }
@@ -159,6 +187,9 @@ void update_draw(void) {
   // --- Draw ---
   BeginDrawing();
   ClearBackground((Color){235, 200, 150, 255});
+  // GROUND
+  DrawRectangle(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH,
+                PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y, BROWN);
   BeginMode2D(camera);
   DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
                 player.color);
