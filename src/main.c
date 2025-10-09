@@ -32,33 +32,6 @@ float clamp(float value, float min, float max) {
   return value;
 }
 
-int x_start = VIRTUAL_WIDTH / 2 - TILE_WIDTH / 2;
-int y_start = 50;
-void draw_tile(Vector2 pos) {
-  int half_width = TILE_WIDTH / 2;
-  int half_height = TILE_HEIGHT / 2;
-
-  int screen_x = x_start + (pos.x - pos.y) * half_width;
-  int screen_y = y_start + (pos.x + pos.y) * half_height;
-
-  // DrawRectangleLines(screen_x, screen_y, TILE_WIDTH, TILE_HEIGHT, BLACK);
-  Vector2 top = {.x = screen_x + half_width, screen_y};
-  Vector2 left = {.x = screen_x, screen_y + half_height};
-  Vector2 right = {.x = screen_x + TILE_WIDTH, screen_y + half_height};
-  Vector2 bottom = {.x = screen_x + half_width, screen_y + TILE_HEIGHT};
-  // DrawCircle(right.x, right.y, 5, RED);
-  // DrawCircle(top.x, top.y, 5, RED);
-  // DrawCircle(left.x, left.y, 5, RED);
-  // DrawCircle(bottom.x, bottom.y, 5, RED);
-
-  DrawTriangle(top, left, right, GRAY);
-  DrawTriangle(bottom, right, left, GRAY);
-  DrawLineV(top, left, BLACK);
-  DrawLineV(top, right, BLACK);
-  DrawLineV(bottom, right, BLACK);
-  DrawLineV(bottom, left, BLACK);
-}
-
 int main(void) {
   InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
   SetTargetFPS(60);
