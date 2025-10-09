@@ -8,6 +8,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef PLATFORM_WEB
+#include <emscripten/emscripten.h>
+#endif
+
 #define MAX_OBSTACLES 100
 
 const int VIRTUAL_WIDTH = 800;
@@ -17,9 +21,11 @@ const int PLAYER_HEIGHT = 25;
 const int TILE_WIDTH = 100;
 const int TILE_HEIGHT = 50;
 
-void test(char *text) {
-  DrawText(text, GetScreenWidth() / 2, GetScreenHeight() / 2, 100, RED);
-}
+static Entity player;
+static Entity obstacles[MAX_OBSTACLES];
+static Camera2D camera;
+static float spawn_timer = 2.0f;
+static float shake_timer = 0.0f;
 
 float clamp(float value, float min, float max) {
   if (value <= min) {
@@ -28,214 +34,162 @@ float clamp(float value, float min, float max) {
   if (value >= max) {
     return max;
   }
-
   return value;
 }
 
-int main(void) {
-  InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
-  SetTargetFPS(60);
-
-  Entity player = {
+void init_game(void) {
+  player = (Entity){
       .width = PLAYER_WIDTH,
       .height = PLAYER_HEIGHT,
       .pos = {.x = 100, .y = VIRTUAL_HEIGHT / 2.0f},
-      .velocity.x = 1,
-      .velocity.y = 1,
+      .velocity = {.x = 1, .y = 1},
       .current_health = 5,
       .max_health = 5,
       .color = BLUE,
       .damage_cooldown = 0,
   };
 
-  srand((unsigned int)time(NULL));
-
-  Entity obstacles[MAX_OBSTACLES] = {0};
   for (int i = 0; i < MAX_OBSTACLES; i++) {
-    // int rand_x = rand() % VIRTUAL_WIDTH + VIRTUAL_WIDTH;
-    // int rand_y = rand() % VIRTUAL_HEIGHT;
-    // obstacles[i] = (Entity){
-    //     .pos.x = rand_x,
-    //     .pos.y = rand_y,
-    //     .width = 25,
-    //     .height = 25,
-    // };
+    obstacles[i] = (Entity){0};
   }
 
-  float spawn_timer = 2.0f;
-  Camera2D camera = {
+  camera = (Camera2D){
       .target = player.pos,
       .offset = (Vector2){50, VIRTUAL_HEIGHT / 2.0f},
       .rotation = 0.0f,
       .zoom = 1.0f,
   };
 
-  float shake_timer = 0.0f;
-  while (!WindowShouldClose()) {
-    float dt = GetFrameTime();
+  spawn_timer = 2.0f;
+  shake_timer = 0.0f;
+}
 
-    // player.velocity = (Vector2){0};
-    player.velocity.y = 0;
-    player.color = BLUE;
-    // --------------- //
-    // ---- Input ---- //
-    // --------------- //
+void update_draw(void) {
+  float dt = GetFrameTime();
+  player.velocity.y = 0;
+  player.color = BLUE;
 
-    if (IsKeyDown(KEY_D)) {
-      player.velocity.x = 1.0f;
-    }
-
-    // (NOTE) Disable this until i change the movement code to increase/decrease
-    // velocity gradually since this is letting the player move backwards
-    //
-    // if (IsKeyDown(KEY_A)) {
-    //   player.velocity.x = -1.0f;
-    // }
-
-    if (IsKeyDown(KEY_W)) {
-      player.velocity.y = -1.0f;
-    }
-
-    if (IsKeyDown(KEY_S)) {
-      player.velocity.y = 1.0f;
-    }
-
-    // ---------------- //
-    // ---- Update ---- //
-    // ---------------- //
-
-    float move_speed = 200.0f;
-    player.pos.x += player.velocity.x * move_speed * dt;
-    player.pos.y += player.velocity.y * move_speed * dt;
-    player.pos.y = clamp(player.pos.y, 0, VIRTUAL_HEIGHT - player.height);
-
-    camera.target.x = floorf(player.pos.x);
-
-    if (player.damage_cooldown > 0.0f) {
-      player.damage_cooldown -= dt;
-    }
-
-    spawn_timer -= dt;
-    if (spawn_timer <= 0.0) {
-      spawn_timer = 2.0f;
-      for (int i = 0; i < MAX_OBSTACLES; i++) {
-        if (!obstacles[i].is_active) {
-          obstacles[i].is_active = true;
-          obstacles[i].width = 25;
-          obstacles[i].height = 25;
-          obstacles[i].pos.x = camera.target.x + VIRTUAL_WIDTH + (rand() % 300);
-          obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
-          break;
-        }
-      }
-    }
-
-    for (int i = 0; i < MAX_OBSTACLES; i++) {
-      Entity *obstacle = &obstacles[i];
-      if (!obstacle->is_active) {
-        continue;
-      }
-
-      if (obstacle->pos.x + obstacle->width < camera.target.x) {
-        // (NOTE)
-        // this can just be is->active false but I like the amount of blocks
-        // being spawned. i guess i could also get rid of the other code
-        // obstacle->is_active = false;
-        int rand_x = (camera.target.x + VIRTUAL_WIDTH) + rand() % 300;
-        int rand_y = rand() % VIRTUAL_HEIGHT;
-        obstacles[i] = (Entity){
-            .pos.x = rand_x,
-            .pos.y = rand_y,
-            .width = 25,
-            .height = 25,
-            .is_active = true,
-        };
-      }
-    }
-
-    for (int i = 0; i < MAX_OBSTACLES; i++) {
-      Entity *obstacle = &obstacles[i];
-      Rectangle player_rect = {.x = player.pos.x,
-                               .y = player.pos.y,
-                               .width = player.width,
-                               .height = player.height};
-      Rectangle object_rect = {.x = obstacle->pos.x,
-                               .y = obstacle->pos.y,
-                               .width = obstacle->width,
-                               .height = obstacle->height};
-
-      // Player takes damage
-      if (CheckCollisionRecs(player_rect, object_rect) &&
-          player.damage_cooldown <= 0) {
-        player.current_health--;
-        player.color = RED;
-        player.damage_cooldown = 0.5f;
-        shake_timer = 0.5f;
-      }
-    }
-
-    if (shake_timer > 0) {
-      shake_timer -= dt;
-      float offset_x = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-      float offset_y = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-      // (NOTE) magnitude can change based on how much damage you took or what
-      // you took damage from?
-      float shake_magnitude = 10.0f;
-      camera.target.x = camera.target.x + offset_x * shake_magnitude;
-      // camera.target.y = offset_y * shake_magnitude;
-    }
-
-    // Start over
-    if (player.current_health <= 0) {
-      // (NOTE) probably move this stuff into game_state, then I can just write
-      // a function that takes game_state and updates all of these properties
-      // that I can also use at the start of the game
-      player = (Entity){
-          .width = PLAYER_WIDTH,
-          .height = PLAYER_HEIGHT,
-          .pos = {.x = 0, .y = VIRTUAL_HEIGHT / 2.0f},
-          .velocity.x = 1,
-          .velocity.y = 1,
-          .current_health = 5,
-          .max_health = 5,
-          .color = BLUE,
-          .damage_cooldown = 0,
-      };
-      for (int i = 0; i < MAX_OBSTACLES; i++) {
-        obstacles[i] = (Entity){0};
-      }
-      Camera2D camera = {
-          .target = player.pos,
-          .offset = (Vector2){50, VIRTUAL_HEIGHT / 2.0f},
-          .rotation = 0.0f,
-          .zoom = 1.0f,
-      };
-      shake_timer = 0.0f;
-      spawn_timer = 2.0f;
-    }
-
-    // ---------------- //
-    // ----- Draw ----- //
-    // ---------------- //
-    BeginDrawing();
-    ClearBackground((Color){235, 200, 150, 255});
-    BeginMode2D(camera);
-    DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
-                  player.color);
-    for (int i = 0; i < MAX_OBSTACLES; i++) {
-      DrawRectangle(obstacles[i].pos.x, obstacles[i].pos.y, 25, 25, DARKGREEN);
-    }
-    EndMode2D();
-
-    // DRAW HEALTH
-    for (int i = 0; i < player.max_health; i++) {
-      DrawRectangle((i * 35), 30, 25, 25,
-                    i < player.current_health ? RED : GRAY);
-    }
-
-    DrawFPS(0, 0);
-    EndDrawing();
+  // --- Input ---
+  if (IsKeyDown(KEY_D)) {
+    player.velocity.x = 1.0f;
   }
+  if (IsKeyDown(KEY_W)) {
+    player.velocity.y = -1.0f;
+  }
+  if (IsKeyDown(KEY_S)) {
+    player.velocity.y = 1.0f;
+  }
+
+  // --- Update ---
+  float move_speed = 200.0f;
+  player.pos.x += player.velocity.x * move_speed * dt;
+  player.pos.y += player.velocity.y * move_speed * dt;
+  player.pos.y = clamp(player.pos.y, 0, VIRTUAL_HEIGHT - player.height);
+
+  camera.target.x = floorf(player.pos.x);
+
+  if (player.damage_cooldown > 0.0f)
+    player.damage_cooldown -= dt;
+
+  // Spawn obstacles periodically
+  spawn_timer -= dt;
+  if (spawn_timer <= 0.0f) {
+    spawn_timer = 2.0f;
+    for (int i = 0; i < MAX_OBSTACLES; i++) {
+      if (!obstacles[i].is_active) {
+        obstacles[i].is_active = true;
+        obstacles[i].width = 25;
+        obstacles[i].height = 25;
+        obstacles[i].pos.x = camera.target.x + VIRTUAL_WIDTH + (rand() % 300);
+        obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
+        break;
+      }
+    }
+  }
+
+  // Move and recycle obstacles
+  for (int i = 0; i < MAX_OBSTACLES; i++) {
+    Entity *obstacle = &obstacles[i];
+    if (!obstacle->is_active)
+      continue;
+
+    if (obstacle->pos.x + obstacle->width < camera.target.x) {
+      int rand_x = (camera.target.x + VIRTUAL_WIDTH) + rand() % 300;
+      int rand_y = rand() % VIRTUAL_HEIGHT;
+      *obstacle = (Entity){
+          .pos.x = rand_x,
+          .pos.y = rand_y,
+          .width = 25,
+          .height = 25,
+          .is_active = true,
+      };
+    }
+  }
+
+  // Check collisions
+  for (int i = 0; i < MAX_OBSTACLES; i++) {
+    Entity *obstacle = &obstacles[i];
+    Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
+                             player.height};
+    Rectangle object_rect = {obstacle->pos.x, obstacle->pos.y, obstacle->width,
+                             obstacle->height};
+
+    if (CheckCollisionRecs(player_rect, object_rect) &&
+        player.damage_cooldown <= 0) {
+      player.current_health--;
+      player.color = RED;
+      player.damage_cooldown = 0.5f;
+      shake_timer = 0.5f;
+    }
+  }
+
+  // Screen shake
+  if (shake_timer > 0) {
+    shake_timer -= dt;
+    float offset_x = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+    float shake_magnitude = 10.0f;
+    camera.target.x += offset_x * shake_magnitude;
+  }
+
+  // Reset on death
+  if (player.current_health <= 0) {
+    init_game();
+  }
+
+  // --- Draw ---
+  BeginDrawing();
+  ClearBackground((Color){235, 200, 150, 255});
+  BeginMode2D(camera);
+  DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
+                player.color);
+  for (int i = 0; i < MAX_OBSTACLES; i++) {
+    if (obstacles[i].is_active)
+      DrawRectangle(obstacles[i].pos.x, obstacles[i].pos.y, 25, 25, DARKGREEN);
+  }
+  EndMode2D();
+
+  for (int i = 0; i < player.max_health; i++) {
+    DrawRectangle((i * 35), 30, 25, 25, i < player.current_health ? RED : GRAY);
+  }
+
+  DrawFPS(0, 0);
+  EndDrawing();
+}
+
+int main(void) {
+  InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
+  SetTargetFPS(60);
+
+  srand((unsigned int)time(NULL));
+  init_game();
+
+#ifdef PLATFORM_WEB
+  emscripten_set_main_loop(update_draw, 0, 1);
+#else
+  while (!WindowShouldClose()) {
+    update_draw();
+  }
+#endif
 
   CloseWindow();
   return 0;
