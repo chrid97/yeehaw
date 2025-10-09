@@ -12,6 +12,9 @@ typedef struct {
   Vector2 pos;
   Vector2 velocity;
   bool is_active;
+  int current_health;
+  int max_health;
+  Color color;
 } Entity;
 
 typedef struct {

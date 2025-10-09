@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
@@ -19,6 +18,10 @@ const int TILE_HEIGHT = 50;
 
 void test(char *text) {
   DrawText(text, GetScreenWidth() / 2, GetScreenHeight() / 2, 100, RED);
+}
+
+Vector2 to_screen(Vector2 world_pos, Vector2 camera) {
+  return (Vector2){world_pos.x - camera.x, world_pos.y - camera.y};
 }
 
 int x_start = VIRTUAL_WIDTH / 2 - TILE_WIDTH / 2;
@@ -58,9 +61,12 @@ int main(void) {
       .pos = {.x = 0, .y = VIRTUAL_HEIGHT / 2.0f},
       .velocity.x = 1,
       .velocity.y = 1,
+      .current_health = 5,
+      .max_health = 5,
+      .color = BLUE,
   };
 
-  srand(time(NULL));
+  srand((unsigned int)time(NULL));
 
   Entity obstacles[MAX_OBSTACLES] = {0};
   for (int i = 0; i < MAX_OBSTACLES; i++) {
@@ -75,7 +81,7 @@ int main(void) {
   }
 
   float spawn_timer = 2.0f;
-  float world_offset = 0;
+  float camera_x = 0;
   while (!WindowShouldClose()) {
     float dt = GetFrameTime();
     // Screen scaling
@@ -86,11 +92,14 @@ int main(void) {
     float scale_y = (float)screen_height / VIRTUAL_HEIGHT;
     float scale = (scale_x < scale_y) ? scale_x : scale_y;
 
+    camera_x += 200.0f * dt;
+    player.pos.x += 200.0f * dt;
+    player.velocity = (Vector2){0};
+    player.color = BLUE;
     // --------------- //
     // ---- Input ---- //
     // --------------- //
-    world_offset += 100.0f * dt;
-    player.velocity = (Vector2){0};
+
     if (IsKeyDown(KEY_D)) {
       player.velocity.x = 1.0f;
     }
@@ -110,22 +119,20 @@ int main(void) {
     // ---------------- //
     // ---- Update ---- //
     // ---------------- //
-    float move_speed = 100.0f;
+
+    float move_speed = 200.0f;
     player.pos.x += player.velocity.x * move_speed * dt;
     player.pos.y += player.velocity.y * move_speed * dt;
 
     spawn_timer -= dt;
-    if (spawn_timer < 0) {
-      spawn_timer = 0.0;
-    }
-    if (spawn_timer == 0.0) {
+    if (spawn_timer <= 0.0) {
       spawn_timer = 2.0f;
       for (int i = 0; i < MAX_OBSTACLES; i++) {
         if (!obstacles[i].is_active) {
           obstacles[i].is_active = true;
           obstacles[i].width = 25;
           obstacles[i].height = 25;
-          obstacles[i].pos.x = world_offset + VIRTUAL_WIDTH + (rand() % 300);
+          obstacles[i].pos.x = camera_x + VIRTUAL_WIDTH + (rand() % 300);
           obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
           break;
         }
@@ -138,8 +145,8 @@ int main(void) {
         continue;
       }
 
-      if (obstacle->pos.x + obstacle->width < world_offset) {
-        int rand_x = (world_offset + VIRTUAL_WIDTH) + rand() % 300;
+      if (obstacle->pos.x + obstacle->width < camera_x) {
+        int rand_x = (camera_x + VIRTUAL_WIDTH) + rand() % 300;
         int rand_y = rand() % VIRTUAL_HEIGHT;
         obstacles[i] = (Entity){
             .pos.x = rand_x,
@@ -151,17 +158,42 @@ int main(void) {
       }
     }
 
+    for (int i = 0; i < MAX_OBSTACLES; i++) {
+      Entity *obstacle = &obstacles[i];
+      Rectangle player_rect = {.x = player.pos.x,
+                               .y = player.pos.y,
+                               .width = player.width,
+                               .height = player.height};
+      Rectangle object_rect = {.x = obstacle->pos.x,
+                               .y = obstacle->pos.y,
+                               .width = obstacle->width,
+                               .height = obstacle->height};
+
+      if (CheckCollisionRecs(player_rect, object_rect)) {
+        player.color = RED;
+      }
+    }
+
     // ---------------- //
     // ----- Draw ----- //
     // ---------------- //
     BeginDrawing();
     ClearBackground((Color){235, 200, 150, 255});
 
-    DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
-                  BLUE);
+    DrawRectangle((player.pos.x - camera_x) * scale, player.pos.y * scale,
+                  player.width * scale, player.height * scale, player.color);
     for (int i = 0; i < MAX_OBSTACLES; i++) {
-      DrawRectangle(obstacles[i].pos.x - world_offset, obstacles[i].pos.y, 25,
-                    25, DARKGREEN);
+      DrawRectangle((obstacles[i].pos.x - camera_x) * scale,
+                    obstacles[i].pos.y * scale, 25 * scale, 25 * scale,
+                    DARKGREEN);
+    }
+
+    // DRAW HEALTH
+    for (int i = 0; i < player.max_health; i++) {
+      DrawRectangle((i * 35) * scale, 30 * scale, 25 * scale, 25 * scale, GRAY);
+    }
+    for (int i = 0; i < player.current_health; i++) {
+      DrawRectangle((i * 35) * scale, 30 * scale, 25 * scale, 25 * scale, RED);
     }
 
     DrawFPS(0, 0);
