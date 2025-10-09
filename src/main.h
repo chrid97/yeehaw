@@ -11,6 +11,7 @@ typedef struct {
   float width;
   Vector2 pos;
   Vector2 velocity;
+  // maybe is_on_screen is a better name?
   bool is_active;
   int current_health;
   int max_health;

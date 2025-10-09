@@ -24,6 +24,17 @@ Vector2 to_screen(Vector2 world_pos, Vector2 camera) {
   return (Vector2){world_pos.x - camera.x, world_pos.y - camera.y};
 }
 
+float clamp(float value, float min, float max) {
+  if (value <= min) {
+    return min;
+  }
+  if (value >= max) {
+    return max;
+  }
+
+  return value;
+}
+
 int x_start = VIRTUAL_WIDTH / 2 - TILE_WIDTH / 2;
 int y_start = 50;
 void draw_tile(Vector2 pos) {
@@ -88,7 +99,6 @@ int main(void) {
     // Screen scaling
     int screen_width = GetScreenWidth();
     int screen_height = GetScreenHeight();
-    float delta = GetFrameTime();
     float scale_x = (float)screen_width / VIRTUAL_WIDTH;
     float scale_y = (float)screen_height / VIRTUAL_HEIGHT;
     float scale = (scale_x < scale_y) ? scale_x : scale_y;
@@ -127,6 +137,7 @@ int main(void) {
     player.pos.x += player.velocity.x * move_speed * dt;
     camera_x = player.pos.x - 100;
     player.pos.y += player.velocity.y * move_speed * dt;
+    player.pos.y = clamp(player.pos.y, 0, VIRTUAL_HEIGHT - player.height);
 
     if (player.damage_cooldown > 0.0f) {
       player.damage_cooldown -= dt;
@@ -154,6 +165,10 @@ int main(void) {
       }
 
       if (obstacle->pos.x + obstacle->width < camera_x) {
+        // (NOTE)
+        // this can just be is->active false but I like the amount of blocks
+        // being spawned. i guess i could also get rid of the other code
+        // obstacle->is_active = false;
         int rand_x = (camera_x + VIRTUAL_WIDTH) + rand() % 300;
         int rand_y = rand() % VIRTUAL_HEIGHT;
         obstacles[i] = (Entity){
