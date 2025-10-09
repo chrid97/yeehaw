@@ -94,8 +94,6 @@ int main(void) {
     float scale = (scale_x < scale_y) ? scale_x : scale_y;
 
     int camera_move_speed = 300.0f;
-    camera_x += camera_move_speed * dt;
-    player.pos.x += camera_move_speed * dt;
 
     player.velocity = (Vector2){0};
     player.color = BLUE;
@@ -124,7 +122,10 @@ int main(void) {
     // ---------------- //
 
     float move_speed = 200.0f;
+    player.pos.x +=
+        player.velocity.x * move_speed * dt + camera_move_speed * dt;
     player.pos.x += player.velocity.x * move_speed * dt;
+    camera_x = player.pos.x - 100;
     player.pos.y += player.velocity.y * move_speed * dt;
 
     if (player.damage_cooldown > 0.0f) {
