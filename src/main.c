@@ -1,6 +1,7 @@
 #include "main.h"
 #include "raylib.h"
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -18,10 +19,6 @@ const int TILE_HEIGHT = 50;
 
 void test(char *text) {
   DrawText(text, GetScreenWidth() / 2, GetScreenHeight() / 2, 100, RED);
-}
-
-Vector2 to_screen(Vector2 world_pos, Vector2 camera) {
-  return (Vector2){world_pos.x - camera.x, world_pos.y - camera.y};
 }
 
 float clamp(float value, float min, float max) {
@@ -69,7 +66,7 @@ int main(void) {
   Entity player = {
       .width = PLAYER_WIDTH,
       .height = PLAYER_HEIGHT,
-      .pos = {.x = 0, .y = VIRTUAL_HEIGHT / 2.0f},
+      .pos = {.x = 100, .y = VIRTUAL_HEIGHT / 2.0f},
       .velocity.x = 1,
       .velocity.y = 1,
       .current_health = 5,
@@ -93,19 +90,17 @@ int main(void) {
   }
 
   float spawn_timer = 2.0f;
-  float camera_x = 0;
+  Camera2D camera = {
+      .target = player.pos,
+      .offset = (Vector2){50, VIRTUAL_HEIGHT / 2.0f},
+      .rotation = 0.0f,
+      .zoom = 1.0f,
+  };
   while (!WindowShouldClose()) {
     float dt = GetFrameTime();
-    // Screen scaling
-    int screen_width = GetScreenWidth();
-    int screen_height = GetScreenHeight();
-    float scale_x = (float)screen_width / VIRTUAL_WIDTH;
-    float scale_y = (float)screen_height / VIRTUAL_HEIGHT;
-    float scale = (scale_x < scale_y) ? scale_x : scale_y;
 
-    int camera_move_speed = 300.0f;
-
-    player.velocity = (Vector2){0};
+    // player.velocity = (Vector2){0};
+    player.velocity.y = 0;
     player.color = BLUE;
     // --------------- //
     // ---- Input ---- //
@@ -115,9 +110,12 @@ int main(void) {
       player.velocity.x = 1.0f;
     }
 
-    if (IsKeyDown(KEY_A)) {
-      player.velocity.x = -1.0f;
-    }
+    // (NOTE) Disable this until i change the movement code to increase/decrease
+    // velocity gradually since this is letting the player move backwards
+    //
+    // if (IsKeyDown(KEY_A)) {
+    //   player.velocity.x = -1.0f;
+    // }
 
     if (IsKeyDown(KEY_W)) {
       player.velocity.y = -1.0f;
@@ -132,12 +130,11 @@ int main(void) {
     // ---------------- //
 
     float move_speed = 200.0f;
-    player.pos.x +=
-        player.velocity.x * move_speed * dt + camera_move_speed * dt;
     player.pos.x += player.velocity.x * move_speed * dt;
-    camera_x = player.pos.x - 100;
     player.pos.y += player.velocity.y * move_speed * dt;
     player.pos.y = clamp(player.pos.y, 0, VIRTUAL_HEIGHT - player.height);
+
+    camera.target.x = floorf(player.pos.x);
 
     if (player.damage_cooldown > 0.0f) {
       player.damage_cooldown -= dt;
@@ -151,7 +148,7 @@ int main(void) {
           obstacles[i].is_active = true;
           obstacles[i].width = 25;
           obstacles[i].height = 25;
-          obstacles[i].pos.x = camera_x + VIRTUAL_WIDTH + (rand() % 300);
+          obstacles[i].pos.x = camera.target.x + VIRTUAL_WIDTH + (rand() % 300);
           obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
           break;
         }
@@ -164,12 +161,12 @@ int main(void) {
         continue;
       }
 
-      if (obstacle->pos.x + obstacle->width < camera_x) {
+      if (obstacle->pos.x + obstacle->width < camera.target.x) {
         // (NOTE)
         // this can just be is->active false but I like the amount of blocks
         // being spawned. i guess i could also get rid of the other code
         // obstacle->is_active = false;
-        int rand_x = (camera_x + VIRTUAL_WIDTH) + rand() % 300;
+        int rand_x = (camera.target.x + VIRTUAL_WIDTH) + rand() % 300;
         int rand_y = rand() % VIRTUAL_HEIGHT;
         obstacles[i] = (Entity){
             .pos.x = rand_x,
@@ -200,6 +197,7 @@ int main(void) {
       }
     }
 
+    // Start over
     if (player.current_health <= 0) {
       player = (Entity){
           .width = PLAYER_WIDTH,
@@ -217,7 +215,7 @@ int main(void) {
         obstacles[i] = (Entity){0};
       }
       spawn_timer = 2.0f;
-      camera_x = 0;
+      camera.target = player.pos;
     }
 
     // ---------------- //
@@ -225,21 +223,18 @@ int main(void) {
     // ---------------- //
     BeginDrawing();
     ClearBackground((Color){235, 200, 150, 255});
-
-    DrawRectangle((player.pos.x - camera_x) * scale, player.pos.y * scale,
-                  player.width * scale, player.height * scale, player.color);
+    BeginMode2D(camera);
+    DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
+                  player.color);
     for (int i = 0; i < MAX_OBSTACLES; i++) {
-      DrawRectangle((obstacles[i].pos.x - camera_x) * scale,
-                    obstacles[i].pos.y * scale, 25 * scale, 25 * scale,
-                    DARKGREEN);
+      DrawRectangle(obstacles[i].pos.x, obstacles[i].pos.y, 25, 25, DARKGREEN);
     }
+    EndMode2D();
 
     // DRAW HEALTH
     for (int i = 0; i < player.max_health; i++) {
-      DrawRectangle((i * 35) * scale, 30 * scale, 25 * scale, 25 * scale, GRAY);
-    }
-    for (int i = 0; i < player.current_health; i++) {
-      DrawRectangle((i * 35) * scale, 30 * scale, 25 * scale, 25 * scale, RED);
+      DrawRectangle((i * 35), 30, 25, 25,
+                    i < player.current_health ? RED : GRAY);
     }
 
     DrawFPS(0, 0);
