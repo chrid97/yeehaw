@@ -8,6 +8,14 @@
 #include <time.h>
 #include <unistd.h>
 
+Color SKY_COLOR = (Color){227, 199, 154, 255};    // DesertSand
+Color GROUND_COLOR = (Color){180, 123, 82, 255};  // DustyClay
+Color MOUNTAIN_COLOR = (Color){124, 79, 43, 255}; // CowhideBrown
+Color PLAYER_COLOR = (Color){53, 80, 112, 255};   // DenimBlue
+Color OBSTACLE_COLOR = (Color){94, 123, 76, 255}; // CactusGreen
+Color OUTLINE_COLOR = (Color){46, 28, 19, 255};   // FrontierDark
+Color ACCENT_COLOR = (Color){226, 125, 96, 255};  // SunsetOrange
+
 #ifdef PLATFORM_WEB
 #include <emscripten/emscripten.h>
 #endif
@@ -58,6 +66,29 @@ float clamp(float value, float min, float max) {
   return value;
 }
 
+void draw_sun() {
+  // --- SUN ---
+  float sun_radius = 40.0f;
+  Vector2 sun_center = {VIRTUAL_WIDTH - 80, 80}; // top-right corner
+  Color sun_color = (Color){255, 220, 120, 255}; // warm golden yellow
+
+  // Core sun
+  DrawCircleV(sun_center, sun_radius, sun_color);
+
+  // Rays (simple radial lines)
+  int ray_count = 8;
+  for (int i = 0; i < ray_count; i++) {
+    float angle = (PI * 2 / ray_count) * i;
+    float inner = sun_radius + 5;
+    float outer = sun_radius + 25;
+    Vector2 p1 = {sun_center.x + cosf(angle) * inner,
+                  sun_center.y + sinf(angle) * inner};
+    Vector2 p2 = {sun_center.x + cosf(angle) * outer,
+                  sun_center.y + sinf(angle) * outer};
+    DrawLineEx(p1, p2, 3.0f, (Color){255, 200, 100, 200});
+  }
+}
+
 void init_game(void) {
   float player_starting_y_position =
       (PLAYER_LOWER_BOUND_Y +
@@ -70,7 +101,7 @@ void init_game(void) {
       .velocity = {.x = 1, .y = 1},
       .current_health = 5,
       .max_health = 5,
-      .color = BLUE,
+      .color = PLAYER_COLOR,
       .damage_cooldown = 0,
   };
 
@@ -92,7 +123,7 @@ void init_game(void) {
 void update_draw(void) {
   float dt = GetFrameTime();
   player.velocity.y = 0;
-  player.color = BLUE;
+  player.color = PLAYER_COLOR;
 
   // --- Input ---
   if (IsKeyDown(KEY_D)) {
@@ -129,8 +160,8 @@ void update_draw(void) {
         obstacles[i].height = 25;
         obstacles[i].pos.x = camera.target.x + VIRTUAL_WIDTH + (rand() % 300);
         // obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
-        obstacles[i].pos.y = random_betweenf(PLAYER_LOWER_BOUND_Y - 100,
-                                             PLAYER_LOWER_BOUND_Y + 100);
+        obstacles[i].pos.y = random_betweenf(PLAYER_LOWER_BOUND_Y - 75,
+                                             PLAYER_LOWER_BOUND_Y + 75);
         break;
       }
     }
@@ -186,16 +217,19 @@ void update_draw(void) {
 
   // --- Draw ---
   BeginDrawing();
-  ClearBackground((Color){235, 200, 150, 255});
+  ClearBackground(SKY_COLOR);
+  // ClearBackground((Color){235, 200, 150, 255});
   // GROUND
   DrawRectangle(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH,
-                PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y, BROWN);
+                PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y, GROUND_COLOR);
+  draw_sun();
   BeginMode2D(camera);
   DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
                 player.color);
   for (int i = 0; i < MAX_OBSTACLES; i++) {
     if (obstacles[i].is_active)
-      DrawRectangle(obstacles[i].pos.x, obstacles[i].pos.y, 25, 25, DARKGREEN);
+      DrawRectangle(obstacles[i].pos.x, obstacles[i].pos.y, 25, 25,
+                    OBSTACLE_COLOR);
   }
   EndMode2D();
 
