@@ -15,6 +15,7 @@ typedef struct {
   int current_health;
   int max_health;
   Color color;
+  float damage_cooldown;
 } Entity;
 
 typedef struct {

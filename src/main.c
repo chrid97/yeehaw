@@ -64,6 +64,7 @@ int main(void) {
       .current_health = 5,
       .max_health = 5,
       .color = BLUE,
+      .damage_cooldown = 0,
   };
 
   srand((unsigned int)time(NULL));
@@ -92,8 +93,10 @@ int main(void) {
     float scale_y = (float)screen_height / VIRTUAL_HEIGHT;
     float scale = (scale_x < scale_y) ? scale_x : scale_y;
 
-    camera_x += 200.0f * dt;
-    player.pos.x += 200.0f * dt;
+    int camera_move_speed = 300.0f;
+    camera_x += camera_move_speed * dt;
+    player.pos.x += camera_move_speed * dt;
+
     player.velocity = (Vector2){0};
     player.color = BLUE;
     // --------------- //
@@ -123,6 +126,10 @@ int main(void) {
     float move_speed = 200.0f;
     player.pos.x += player.velocity.x * move_speed * dt;
     player.pos.y += player.velocity.y * move_speed * dt;
+
+    if (player.damage_cooldown > 0.0f) {
+      player.damage_cooldown -= dt;
+    }
 
     spawn_timer -= dt;
     if (spawn_timer <= 0.0) {
@@ -169,9 +176,32 @@ int main(void) {
                                .width = obstacle->width,
                                .height = obstacle->height};
 
-      if (CheckCollisionRecs(player_rect, object_rect)) {
+      if (CheckCollisionRecs(player_rect, object_rect) &&
+          player.damage_cooldown <= 0) {
+        player.current_health--;
         player.color = RED;
+        player.damage_cooldown = 0.5f;
       }
+    }
+
+    if (player.current_health <= 0) {
+      player = (Entity){
+          .width = PLAYER_WIDTH,
+          .height = PLAYER_HEIGHT,
+          .pos = {.x = 0, .y = VIRTUAL_HEIGHT / 2.0f},
+          .velocity.x = 1,
+          .velocity.y = 1,
+          .current_health = 5,
+          .max_health = 5,
+          .color = BLUE,
+          .damage_cooldown = 0,
+      };
+
+      for (int i = 0; i < MAX_OBSTACLES; i++) {
+        obstacles[i] = (Entity){0};
+      }
+      spawn_timer = 2.0f;
+      camera_x = 0;
     }
 
     // ---------------- //
