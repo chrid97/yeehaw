@@ -8,12 +8,8 @@
 #include <time.h>
 #include <unistd.h>
 
-Color SKY_COLOR = (Color){227, 199, 154, 255}; // DesertSand
-
-Color GROUND_COLOR = (Color){180, 100, 82, 255}; // DustyClay
-Color GROUND_HIGHLIGHT = (Color){185, 135, 110, 255};
-Color GROUND_SHADE = (Color){140, 95, 80, 255};
-
+Color SKY_COLOR = (Color){227, 199, 154, 255};    // DesertSand
+Color GROUND_COLOR = (Color){180, 100, 82, 255};  // DustyClay
 Color MOUNTAIN_COLOR = (Color){124, 79, 43, 255}; // CowhideBrown
 Color PLAYER_COLOR = (Color){53, 80, 112, 255};   // DenimBlue
 Color OBSTACLE_COLOR = (Color){94, 123, 76, 255}; // CactusGreen
@@ -29,12 +25,8 @@ Color ACCENT_COLOR = (Color){226, 125, 96, 255};  // SunsetOrange
 const int VIRTUAL_WIDTH = 800;
 const int VIRTUAL_HEIGHT = 450;
 const int PLAYER_WIDTH = 40;
-const int PLAYER_HEIGHT = 25;
-const int TILE_WIDTH = 100;
-const int TILE_HEIGHT = 50;
+const int PLAYER_HEIGHT = 40;
 
-// Player movement area
-// (NOTE) maybe I want to move this a bit lower? and make it smaller? shrugs
 float PLAYER_LOWER_BOUND_Y = VIRTUAL_HEIGHT - 135;
 float PLAYER_UPPER_BOUND_Y = VIRTUAL_HEIGHT;
 
@@ -48,6 +40,9 @@ static Texture2D mountain;
 static Texture2D sky;
 static Texture2D cloud;
 static Texture2D canyon;
+static Texture2D horse;
+static int current_frame = 0;
+static float frame_timer = 0.0f;
 
 /// inclusive
 int random_between(int min, int max) {
@@ -75,34 +70,12 @@ float clamp(float value, float min, float max) {
   return value;
 }
 
-void draw_sun() {
-  // --- SUN ---
-  float sun_radius = 40.0f;
-  Vector2 sun_center = {VIRTUAL_WIDTH - 80, 80}; // top-right corner
-  Color sun_color = (Color){255, 220, 120, 255}; // warm golden yellow
-
-  // Core sun
-  DrawCircleV(sun_center, sun_radius, sun_color);
-
-  // Rays (simple radial lines)
-  int ray_count = 8;
-  for (int i = 0; i < ray_count; i++) {
-    float angle = (PI * 2 / ray_count) * i;
-    float inner = sun_radius + 5;
-    float outer = sun_radius + 25;
-    Vector2 p1 = {sun_center.x + cosf(angle) * inner,
-                  sun_center.y + sinf(angle) * inner};
-    Vector2 p2 = {sun_center.x + cosf(angle) * outer,
-                  sun_center.y + sinf(angle) * outer};
-    DrawLineEx(p1, p2, 3.0f, (Color){255, 200, 100, 200});
-  }
-}
-
 void init_game(void) {
   sky = LoadTexture("assets/layers/sky.png");
   cloud = LoadTexture("assets/layers/clouds.png");
   mountain = LoadTexture("assets/layers/far-mountains.png");
   canyon = LoadTexture("assets/layers/canyon.png");
+  horse = LoadTexture("assets/horse.png");
 
   float player_starting_y_position =
       (PLAYER_LOWER_BOUND_Y +
@@ -154,10 +127,10 @@ void update_draw(void) {
   // --- Update ---
   player.pos.x += player.velocity.x * 700.0f * dt;
   player.pos.y += player.velocity.y * 200.0f * dt;
-  player.pos.y = clamp(player.pos.y, PLAYER_LOWER_BOUND_Y,
+  player.pos.y = clamp(player.pos.y, PLAYER_LOWER_BOUND_Y - player.height / 1.5,
                        PLAYER_UPPER_BOUND_Y - player.height);
 
-  camera.target.x = floorf(player.pos.x);
+  camera.target.x = player.pos.x;
 
   if (player.damage_cooldown > 0.0f) {
     player.damage_cooldown -= dt;
@@ -242,18 +215,36 @@ void update_draw(void) {
   // GROUND
   DrawRectangle(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH, PLAYAREA_HEIGHT,
                 GROUND_COLOR);
-  DrawRectangleGradientV(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH,
-                         PLAYAREA_HEIGHT, GROUND_HIGHLIGHT, GROUND_SHADE);
-
-  // draw_sun();
   BeginMode2D(camera);
 
   // Draw player
-  DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
-                player.color);
-  DrawRectangleLinesEx((Rectangle){floorf(player.pos.x - 1), player.pos.y - 1,
-                                   player.width + 2, player.height + 2},
-                       2, OUTLINE_COLOR);
+  // --- Player animation ---
+  int frame_width = 16;
+  int frame_height = 16;
+  int frame_count = 2;
+  frame_timer += dt;
+  if (frame_timer >= 0.15f) { // adjust for speed
+    frame_timer = 0.0f;
+    current_frame = (current_frame + 1) % frame_count;
+  }
+  Rectangle src_rect = {
+      .x = frame_width * current_frame,
+      .y = 0,
+      .width = 16,
+      .height = 16,
+  };
+  Rectangle dest_rect = {
+      .x = player.pos.x,
+      .y = player.pos.y,
+      .width = player.width,
+      .height = player.height,
+  };
+  Vector2 origin_player = {0, 0};
+  DrawTexturePro(horse, src_rect, dest_rect, origin, 0.0f, WHITE);
+  // DrawRectangleLinesEx((Rectangle){floorf(player.pos.x - 1), player.pos.y -
+  // 1,
+  //                                  player.width + 2, player.height + 2},
+  //                      2, OUTLINE_COLOR);
 
   // Draw obstacles
   for (int i = 0; i < MAX_OBSTACLES; i++) {
@@ -296,6 +287,9 @@ int main(void) {
   // shit up
   UnloadTexture(mountain);
   UnloadTexture(cloud);
+  UnloadTexture(sky);
+  UnloadTexture(canyon);
+  UnloadTexture(horse);
   CloseWindow();
   return 0;
 }
