@@ -8,8 +8,12 @@
 #include <time.h>
 #include <unistd.h>
 
-Color SKY_COLOR = (Color){227, 199, 154, 255};    // DesertSand
-Color GROUND_COLOR = (Color){180, 123, 82, 255};  // DustyClay
+Color SKY_COLOR = (Color){227, 199, 154, 255}; // DesertSand
+
+Color GROUND_COLOR = (Color){180, 100, 82, 255}; // DustyClay
+Color GROUND_HIGHLIGHT = (Color){185, 135, 110, 255};
+Color GROUND_SHADE = (Color){140, 95, 80, 255};
+
 Color MOUNTAIN_COLOR = (Color){124, 79, 43, 255}; // CowhideBrown
 Color PLAYER_COLOR = (Color){53, 80, 112, 255};   // DenimBlue
 Color OBSTACLE_COLOR = (Color){94, 123, 76, 255}; // CactusGreen
@@ -31,14 +35,16 @@ const int TILE_HEIGHT = 50;
 
 // Player movement area
 // (NOTE) maybe I want to move this a bit lower? and make it smaller? shrugs
-float PLAYER_LOWER_BOUND_Y = VIRTUAL_HEIGHT * 0.55f;
-float PLAYER_UPPER_BOUND_Y = VIRTUAL_HEIGHT * 0.85f;
+float PLAYER_LOWER_BOUND_Y = VIRTUAL_HEIGHT - 135;
+float PLAYER_UPPER_BOUND_Y = VIRTUAL_HEIGHT;
 
 static Entity player;
 static Entity obstacles[MAX_OBSTACLES];
 static Camera2D camera;
 static float spawn_timer = 2.0f;
 static float shake_timer = 0.0f;
+
+static Texture2D background;
 
 /// inclusive
 int random_between(int min, int max) {
@@ -90,6 +96,7 @@ void draw_sun() {
 }
 
 void init_game(void) {
+  background = LoadTexture("assets/layers/far-mountains.png");
   float player_starting_y_position =
       (PLAYER_LOWER_BOUND_Y +
        (PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y) / 2.0f) -
@@ -97,7 +104,7 @@ void init_game(void) {
   player = (Entity){
       .width = PLAYER_WIDTH,
       .height = PLAYER_HEIGHT,
-      .pos = {.x = 100, .y = player_starting_y_position},
+      .pos = {.x = 0, .y = player_starting_y_position},
       .velocity = {.x = 1, .y = 1},
       .current_health = 5,
       .max_health = 5,
@@ -152,16 +159,15 @@ void update_draw(void) {
   // Spawn obstacles periodically
   spawn_timer -= dt;
   if (spawn_timer <= 0.0f) {
-    spawn_timer = 2.0f;
+    spawn_timer = 1.0f;
     for (int i = 0; i < MAX_OBSTACLES; i++) {
       if (!obstacles[i].is_active) {
         obstacles[i].is_active = true;
         obstacles[i].width = 25;
         obstacles[i].height = 25;
         obstacles[i].pos.x = camera.target.x + VIRTUAL_WIDTH + (rand() % 300);
-        // obstacles[i].pos.y = rand() % VIRTUAL_HEIGHT;
-        obstacles[i].pos.y = random_betweenf(PLAYER_LOWER_BOUND_Y - 75,
-                                             PLAYER_LOWER_BOUND_Y + 75);
+        obstacles[i].pos.y = random_betweenf(
+            PLAYER_LOWER_BOUND_Y, PLAYER_UPPER_BOUND_Y - obstacles[i].height);
         break;
       }
     }
@@ -173,17 +179,8 @@ void update_draw(void) {
     if (!obstacle->is_active)
       continue;
 
-    if (obstacle->pos.x + obstacle->width < camera.target.x) {
-      int rand_x = (camera.target.x + VIRTUAL_WIDTH) + rand() % 300;
-      int rand_y =
-          random_betweenf(PLAYER_LOWER_BOUND_Y - 75, VIRTUAL_HEIGHT - 100);
-      *obstacle = (Entity){
-          .pos.x = rand_x,
-          .pos.y = rand_y,
-          .width = 25,
-          .height = 25,
-          .is_active = true,
-      };
+    if (obstacle->pos.x + obstacle->width < camera.target.x - camera.offset.x) {
+      obstacle->is_active = false;
     }
   }
 
@@ -219,27 +216,43 @@ void update_draw(void) {
   // --- Draw ---
   BeginDrawing();
   ClearBackground(SKY_COLOR);
-  // ClearBackground((Color){235, 200, 150, 255});
-  // ROAD
+  DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT,
+                (Color){255, 180, 130, 40});
+
+  DrawTextureEx(background, (Vector2){0, -135}, 0.0f,
+                (float)VIRTUAL_WIDTH / background.width, WHITE);
+
+  // GROUND
   DrawRectangle(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH,
                 PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y, GROUND_COLOR);
-  DrawRectangleGradientV(0, PLAYER_UPPER_BOUND_Y - 10, VIRTUAL_WIDTH, 10,
-                         GROUND_COLOR, MOUNTAIN_COLOR);
+  DrawRectangleGradientV(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH,
+                         PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y,
+                         GROUND_HIGHLIGHT, GROUND_SHADE);
+
   draw_sun();
   BeginMode2D(camera);
+
   // Draw player
   DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
                 player.color);
   DrawRectangleLinesEx((Rectangle){floorf(player.pos.x - 1), player.pos.y - 1,
                                    player.width + 2, player.height + 2},
                        2, OUTLINE_COLOR);
+
+  // Draw obstacles
   for (int i = 0; i < MAX_OBSTACLES; i++) {
-    if (obstacles[i].is_active)
-      DrawRectangle(obstacles[i].pos.x, obstacles[i].pos.y, 25, 25,
-                    OBSTACLE_COLOR);
+    if (obstacles[i].is_active) {
+      Entity *obstacle = &obstacles[i];
+      DrawRectangle(obstacle->pos.x, obstacle->pos.y, 25, 25, OBSTACLE_COLOR);
+      DrawRectangleLinesEx((Rectangle){obstacle->pos.x - 1, obstacle->pos.y - 1,
+                                       obstacle->width + 2,
+                                       obstacle->height + 2},
+                           2, OUTLINE_COLOR);
+    }
   }
   EndMode2D();
 
+  // Draw player health
   for (int i = 0; i < player.max_health; i++) {
     DrawRectangle((i * 35), 30, 25, 25, i < player.current_health ? RED : GRAY);
   }
@@ -263,6 +276,9 @@ int main(void) {
   }
 #endif
 
+  // is there a point in unloading the texture? Won't the OS just clean this
+  // shit up
+  UnloadTexture(background);
   CloseWindow();
   return 0;
 }
