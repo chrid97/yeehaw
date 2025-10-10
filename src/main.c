@@ -44,7 +44,10 @@ static Camera2D camera;
 static float spawn_timer = 2.0f;
 static float shake_timer = 0.0f;
 
-static Texture2D background;
+static Texture2D mountain;
+static Texture2D sky;
+static Texture2D cloud;
+static Texture2D canyon;
 
 /// inclusive
 int random_between(int min, int max) {
@@ -96,7 +99,11 @@ void draw_sun() {
 }
 
 void init_game(void) {
-  background = LoadTexture("assets/layers/far-mountains.png");
+  sky = LoadTexture("assets/layers/sky.png");
+  cloud = LoadTexture("assets/layers/clouds.png");
+  mountain = LoadTexture("assets/layers/far-mountains.png");
+  canyon = LoadTexture("assets/layers/canyon.png");
+
   float player_starting_y_position =
       (PLAYER_LOWER_BOUND_Y +
        (PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y) / 2.0f) -
@@ -131,6 +138,7 @@ void update_draw(void) {
   float dt = GetFrameTime();
   player.velocity.y = 0;
   player.color = PLAYER_COLOR;
+  float PLAYAREA_HEIGHT = PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y;
 
   // --- Input ---
   if (IsKeyDown(KEY_D)) {
@@ -219,17 +227,25 @@ void update_draw(void) {
   DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT,
                 (Color){255, 180, 130, 40});
 
-  DrawTextureEx(background, (Vector2){0, -135}, 0.0f,
-                (float)VIRTUAL_WIDTH / background.width, WHITE);
+  Rectangle src = {0, 0, (float)sky.width, (float)sky.height};
+  Rectangle dest = {0, 0 - PLAYAREA_HEIGHT / 2, (float)VIRTUAL_WIDTH,
+                    (float)VIRTUAL_HEIGHT};
+  Vector2 origin = {0, 0};
+  DrawTexturePro(sky, src, dest, origin, 0.0f, WHITE);
+  DrawTextureEx(mountain, (Vector2){0, -100 - PLAYAREA_HEIGHT}, 0.0f,
+                (float)VIRTUAL_WIDTH / mountain.width, WHITE);
+  DrawTextureEx(cloud, (Vector2){0, 0 - PLAYAREA_HEIGHT}, 0.0f,
+                (float)VIRTUAL_WIDTH / cloud.width, WHITE);
+  DrawTextureEx(canyon, (Vector2){0, 0 - PLAYAREA_HEIGHT}, 0.0f,
+                (float)VIRTUAL_WIDTH / canyon.width, WHITE);
 
   // GROUND
-  DrawRectangle(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH,
-                PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y, GROUND_COLOR);
+  DrawRectangle(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH, PLAYAREA_HEIGHT,
+                GROUND_COLOR);
   DrawRectangleGradientV(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH,
-                         PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y,
-                         GROUND_HIGHLIGHT, GROUND_SHADE);
+                         PLAYAREA_HEIGHT, GROUND_HIGHLIGHT, GROUND_SHADE);
 
-  draw_sun();
+  // draw_sun();
   BeginMode2D(camera);
 
   // Draw player
@@ -278,7 +294,8 @@ int main(void) {
 
   // is there a point in unloading the texture? Won't the OS just clean this
   // shit up
-  UnloadTexture(background);
+  UnloadTexture(mountain);
+  UnloadTexture(cloud);
   CloseWindow();
   return 0;
 }
