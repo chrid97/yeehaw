@@ -143,6 +143,7 @@ void update_draw(void) {
                        PLAYER_UPPER_BOUND_Y - player.height);
 
   camera.target.x = floorf(player.pos.x);
+
   if (player.damage_cooldown > 0.0f) {
     player.damage_cooldown -= dt;
     player.color = RED;
@@ -219,13 +220,19 @@ void update_draw(void) {
   BeginDrawing();
   ClearBackground(SKY_COLOR);
   // ClearBackground((Color){235, 200, 150, 255});
-  // GROUND
+  // ROAD
   DrawRectangle(0, PLAYER_LOWER_BOUND_Y, VIRTUAL_WIDTH,
                 PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y, GROUND_COLOR);
+  DrawRectangleGradientV(0, PLAYER_UPPER_BOUND_Y - 10, VIRTUAL_WIDTH, 10,
+                         GROUND_COLOR, MOUNTAIN_COLOR);
   draw_sun();
   BeginMode2D(camera);
+  // Draw player
   DrawRectangle(player.pos.x, player.pos.y, player.width, player.height,
                 player.color);
+  DrawRectangleLinesEx((Rectangle){floorf(player.pos.x - 1), player.pos.y - 1,
+                                   player.width + 2, player.height + 2},
+                       2, OUTLINE_COLOR);
   for (int i = 0; i < MAX_OBSTACLES; i++) {
     if (obstacles[i].is_active)
       DrawRectangle(obstacles[i].pos.x, obstacles[i].pos.y, 25, 25,
