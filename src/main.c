@@ -42,6 +42,9 @@ static Texture2D horse;
 static int current_frame = 0;
 static float frame_timer = 0.0f;
 
+static Music bg_music;
+static Sound hit_sound;
+
 /// inclusive
 int random_between(int min, int max) {
   if (max <= min) {
@@ -75,6 +78,13 @@ void init_game(void) {
   canyon = LoadTexture("assets/layers/canyon.png");
   horse = LoadTexture("assets/horse.png");
 
+  bg_music = LoadMusicStream("assets/spagetti-western.ogg");
+  SetMusicVolume(bg_music, 0.35f); // subtle but present
+  PlayMusicStream(bg_music);
+
+  hit_sound = LoadSound("assets/sfx_sounds_impact12.wav");
+  SetSoundVolume(hit_sound, 0.5f);
+
   float player_starting_y_position =
       (PLAYER_LOWER_BOUND_Y +
        (PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y) / 2.0f) -
@@ -107,6 +117,7 @@ void init_game(void) {
 
 void update_draw(void) {
   float dt = GetFrameTime();
+  UpdateMusicStream(bg_music);
   player.velocity.y = 0;
   player.color = WHITE;
   float PLAYAREA_HEIGHT = PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y;
@@ -173,6 +184,7 @@ void update_draw(void) {
 
     if (CheckCollisionRecs(player_rect, object_rect) &&
         player.damage_cooldown <= 0) {
+      PlaySound(hit_sound);
       player.current_health--;
       player.damage_cooldown = 0.5f;
       shake_timer = 0.5f;
@@ -269,7 +281,7 @@ void update_draw(void) {
 int main(void) {
   InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
   SetTargetFPS(60);
-
+  InitAudioDevice();
   srand((unsigned int)time(NULL));
   init_game();
 
@@ -288,6 +300,8 @@ int main(void) {
   UnloadTexture(sky);
   UnloadTexture(canyon);
   UnloadTexture(horse);
+  UnloadMusicStream(bg_music);
+  UnloadSound(hit_sound);
   CloseWindow();
   return 0;
 }
