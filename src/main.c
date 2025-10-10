@@ -194,7 +194,7 @@ void update_draw(void) {
   // Screen shake
   if (shake_timer > 0) {
     shake_timer -= dt;
-    float offset_x = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+    float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
     float shake_magnitude = 10.0f;
     camera.target.x += offset_x * shake_magnitude;
   }
@@ -229,16 +229,15 @@ void update_draw(void) {
 
   // Draw player
   // --- Player animation ---
-  int frame_width = 16;
-  int frame_height = 16;
   int frame_count = 2;
   frame_timer += dt;
   if (frame_timer >= 0.15f) { // adjust for speed
     frame_timer = 0.0f;
     current_frame = (current_frame + 1) % frame_count;
   }
+  // 16 is frame height and width
   Rectangle src_rect = {
-      .x = frame_width * current_frame,
+      .x = 16 * current_frame,
       .y = 0,
       .width = 16,
       .height = 16,
@@ -250,7 +249,7 @@ void update_draw(void) {
       .height = player.height,
   };
   Vector2 origin_player = {0, 0};
-  DrawTexturePro(horse, src_rect, dest_rect, origin, 0.0f, player.color);
+  DrawTexturePro(horse, src_rect, dest_rect, origin_player, 0.0f, player.color);
   // DrawRectangleLinesEx((Rectangle){floorf(player.pos.x - 1), player.pos.y -
   // 1,
   //                                  player.width + 2, player.height + 2},
