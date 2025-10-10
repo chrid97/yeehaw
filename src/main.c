@@ -1,7 +1,6 @@
 #include "main.h"
 #include "raylib.h"
 #include <assert.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -11,7 +10,6 @@
 Color SKY_COLOR = (Color){227, 199, 154, 255};    // DesertSand
 Color GROUND_COLOR = (Color){180, 100, 82, 255};  // DustyClay
 Color MOUNTAIN_COLOR = (Color){124, 79, 43, 255}; // CowhideBrown
-Color PLAYER_COLOR = (Color){53, 80, 112, 255};   // DenimBlue
 Color OBSTACLE_COLOR = (Color){94, 123, 76, 255}; // CactusGreen
 Color OUTLINE_COLOR = (Color){46, 28, 19, 255};   // FrontierDark
 Color ACCENT_COLOR = (Color){226, 125, 96, 255};  // SunsetOrange
@@ -88,7 +86,7 @@ void init_game(void) {
       .velocity = {.x = 1, .y = 1},
       .current_health = 5,
       .max_health = 5,
-      .color = PLAYER_COLOR,
+      .color = WHITE,
       .damage_cooldown = 0,
   };
 
@@ -110,7 +108,7 @@ void init_game(void) {
 void update_draw(void) {
   float dt = GetFrameTime();
   player.velocity.y = 0;
-  player.color = PLAYER_COLOR;
+  player.color = WHITE;
   float PLAYAREA_HEIGHT = PLAYER_UPPER_BOUND_Y - PLAYER_LOWER_BOUND_Y;
 
   // --- Input ---
@@ -240,7 +238,7 @@ void update_draw(void) {
       .height = player.height,
   };
   Vector2 origin_player = {0, 0};
-  DrawTexturePro(horse, src_rect, dest_rect, origin, 0.0f, WHITE);
+  DrawTexturePro(horse, src_rect, dest_rect, origin, 0.0f, player.color);
   // DrawRectangleLinesEx((Rectangle){floorf(player.pos.x - 1), player.pos.y -
   // 1,
   //                                  player.width + 2, player.height + 2},
