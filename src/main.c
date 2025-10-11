@@ -6,7 +6,6 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
@@ -172,9 +171,16 @@ void update_draw(void) {
     camera.target.x += offset_x * shake_magnitude;
   }
 
-  // spawn hazards
+  // recycle hazards
   for (int i = 0; i < MAX_OBSTACLES; i++) {
     Entity *obstacle = &obstacles[i];
+    if (obstacle->pos.y > player.pos.y + 20) {
+      obstacles[i].width = 1;
+      obstacles[i].height = 1;
+      obstacles[i].color = WHITE;
+      obstacles[i].pos.x = random_between(-5, 7);
+      obstacles[i].pos.y = player.pos.y - 40 - i * random_between(2, 4);
+    }
   }
 
   // --- Draw ---
