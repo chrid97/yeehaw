@@ -1,4 +1,3 @@
-// (NOTE) Replace obstacle with hazard
 #include "main.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -23,8 +22,8 @@ static float frame_timer = 0.0f;
 static float shake_timer = 0.0f;
 static float game_timer = 0.0f;
 
-#define MAX_OBSTACLES 100
-static Entity obstacles[MAX_OBSTACLES];
+#define MAX_ENTITIES 100
+static Entity entitys[MAX_ENTITIES];
 static Entity player;
 static Camera2D camera;
 
@@ -91,12 +90,12 @@ void init_game(void) {
   };
 
   // Init Hazards
-  for (int i = 0; i < MAX_OBSTACLES; i++) {
-    obstacles[i].width = 1;
-    obstacles[i].height = 1;
-    obstacles[i].color = WHITE;
-    obstacles[i].pos.x = random_between(-5, 7);
-    obstacles[i].pos.y = -20 - i * random_between(2, 4);
+  for (int i = 0; i < MAX_ENTITIES; i++) {
+    entitys[i].width = 1;
+    entitys[i].height = 1;
+    entitys[i].color = WHITE;
+    entitys[i].pos.x = random_between(-5, 7);
+    entitys[i].pos.y = -20 - i * random_between(2, 4);
   }
 
   // Reset timers
@@ -154,13 +153,13 @@ void update_draw(void) {
     player.color = RED;
   }
 
-  // Player-hazard collision
+  // Player-entity collision
   Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
                            player.height};
-  for (int i = 0; i < MAX_OBSTACLES; i++) {
-    Entity *hazard = &obstacles[i];
-    Rectangle harard_rect = {hazard->pos.x, hazard->pos.y, hazard->width,
-                             hazard->height};
+  for (int i = 0; i < MAX_ENTITIES; i++) {
+    Entity *entity = &entitys[i];
+    Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
+                             entity->height};
     if (CheckCollisionRecs(player_rect, harard_rect) &&
         player.damage_cooldown <= 0) {
       PlaySound(hit_sound);
@@ -179,14 +178,14 @@ void update_draw(void) {
   }
 
   // recycle hazards
-  for (int i = 0; i < MAX_OBSTACLES; i++) {
-    Entity *obstacle = &obstacles[i];
-    if (obstacle->pos.y > player.pos.y + 20) {
-      obstacles[i].width = 1;
-      obstacles[i].height = 1;
-      obstacles[i].color = WHITE;
-      obstacles[i].pos.x = random_between(-5, 7);
-      obstacles[i].pos.y = player.pos.y - 40 - i * random_between(2, 4);
+  for (int i = 0; i < MAX_ENTITIES; i++) {
+    Entity *entity = &entitys[i];
+    if (entity->pos.y > player.pos.y + 20) {
+      entitys[i].width = 1;
+      entitys[i].height = 1;
+      entitys[i].color = WHITE;
+      entitys[i].pos.x = random_between(-5, 7);
+      entitys[i].pos.y = player.pos.y - 40 - i * random_between(2, 4);
     }
   }
 
@@ -240,16 +239,16 @@ void update_draw(void) {
   }
 
   // Draw Hazards
-  for (int i = 0; i < MAX_OBSTACLES; i++) {
-    Entity *obstacle = &obstacles[i];
+  for (int i = 0; i < MAX_ENTITIES; i++) {
+    Entity *entity = &entitys[i];
     // cull
-    if (obstacle->pos.y < player.pos.y - 40 ||
-        obstacle->pos.y > player.pos.y + 20) {
+    if (entity->pos.y < player.pos.y - 40 ||
+        entity->pos.y > player.pos.y + 20) {
       continue;
     }
 
     Vector2 obj =
-        isometric_projection((Vector3){obstacle->pos.x, obstacle->pos.y, 0});
+        isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
     DrawTextureV(rock_texture, obj, WHITE);
   }
 
