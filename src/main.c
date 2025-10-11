@@ -53,12 +53,13 @@ void init_game(void) {
   // Load Textures
   player_sprite = LoadTexture("assets/horse.png");
   tile_wall = LoadTexture("assets/tileset/tile_057.png");
-  tile000 = LoadTexture("assets/tileset/tile_000.png");
+  tile000 = LoadTexture("assets/tileset/tile_009.png");
+  // tile000 = LoadTexture("assets/tileset/tile_014.png");
   rock_texture = LoadTexture("assets/tileset/tile_055.png");
 
   // Load Music
   bg_music = LoadMusicStream("assets/spagetti-western.ogg");
-  SetMusicVolume(bg_music, 0.35f);
+  SetMusicVolume(bg_music, 0.05f);
   PlayMusicStream(bg_music);
 
   // Load SFX
@@ -269,7 +270,8 @@ void update_draw(void) {
 int main(void) {
   InitWindow(1920, 1080, "Yeehaw");
   // InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
-  SetTargetFPS(60);
+  // Uncap FPS because it makes my game feel like tash
+  SetTargetFPS(0);
   InitAudioDevice();
   srand((unsigned int)time(NULL));
   init_game();
