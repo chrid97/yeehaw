@@ -34,6 +34,8 @@ static Texture2D player_sprite;
 static Texture2D tile_wall;
 static Texture2D rock_texture;
 
+static Texture2D border_tile;
+
 static Music bg_music;
 static Sound hit_sound;
 
@@ -56,6 +58,7 @@ void init_game(void) {
   tile000 = LoadTexture("assets/tileset/tile_009.png");
   // tile000 = LoadTexture("assets/tileset/tile_014.png");
   rock_texture = LoadTexture("assets/tileset/tile_055.png");
+  border_tile = LoadTexture("assets/tileset/tile_036.png");
 
   // Load Music
   bg_music = LoadMusicStream("assets/spagetti-western.ogg");
@@ -205,10 +208,20 @@ void update_draw(void) {
   //   }
   // }
 
+  int tile_y = floorf(player.pos.y);
+  int tile_y_offset = 30;
   // Draw world
   // (NOTE) figure out how to start from 0 instead of a negative number
-  int tile_y = floorf(player.pos.y);
   for (int y = tile_y - 30; y < tile_y + 14; y++) {
+
+    // draw from the edge of the screen to the player area (-5)
+    for (int x = -21; x < -5; x++) {
+      Vector3 world = {x, y, 0};
+      Vector2 screen = isometric_projection(world);
+      DrawTextureV(border_tile, screen, WHITE);
+    }
+
+    // Draw play area
     for (int x = -5; x < 8; x++) {
       Vector3 world = {x, y, 0};
       Vector2 screen = isometric_projection(world);
@@ -216,6 +229,13 @@ void update_draw(void) {
       screen.x = floorf(screen.x);
       screen.y = floorf(screen.y);
       DrawTextureV(tile000, screen, WHITE);
+    }
+
+    // draw from the end of the play are to the right half of the screen
+    for (int x = 8; x < 22; x++) {
+      Vector3 world = {x, y, 0};
+      Vector2 screen = isometric_projection(world);
+      DrawTextureV(border_tile, screen, WHITE);
     }
   }
 
