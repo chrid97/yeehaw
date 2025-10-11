@@ -20,6 +20,7 @@ const int TILE_WIDTH = 32;
 const int TILE_HEIGHT = 16;
 static int current_frame = 0;
 static float frame_timer = 0.0f;
+static float shake_timer = 0.0f;
 
 #define MAX_OBSTACLES 100
 static Entity obstacles[MAX_OBSTACLES];
@@ -57,24 +58,35 @@ void init_game(void) {
   SetSoundVolume(hit_sound, 0.5f);
 
   // Init Game Objects
-  player =
-      (Entity){.pos.x = 0, .pos.y = 0, .width = 1, .height = 1, .color = WHITE};
-  camera = (Camera2D){.target = (Vector2){0, 0},
-                      .offset = (Vector2){0, 0},
-                      .rotation = 0.0f,
-                      // (TODO) Add button screen rotation to test
-                      // rotation 10 doesnt look terrible maybe ill use that
-                      // .rotation = 10.0f,
-                      .zoom = 1.0f};
+  player = (Entity){
+      .pos.x = 0,
+      .pos.y = 0,
+      .width = 1,
+      .height = 1,
+      .color = WHITE,
+      .damage_cooldown = 0,
+  };
+  camera = (Camera2D){
+      .target = (Vector2){0, 0},
+      .offset = (Vector2){0, 0},
+      .rotation = 0.0f,
+      // (TODO) Add button screen rotation to test
+      // rotation 10 doesnt look terrible maybe ill use that
+      // .rotation = 10.0f,
+      .zoom = 1.0f,
+  };
 }
 
 void update_draw(void) {
   float dt = GetFrameTime();
   UpdateMusicStream(bg_music);
 
+  // scale
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
   camera.zoom = fminf(scale_x, scale_y);
+
+  player.color = WHITE;
 
   // --- Input ---
   float speed = 5.0f;
@@ -98,17 +110,32 @@ void update_draw(void) {
   camera.target = player_screen;
   camera.offset = (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
+  if (player.damage_cooldown > 0.0f) {
+    player.damage_cooldown -= dt;
+    player.color = RED;
+  }
+
   Entity cactus = {.pos.x = 0, .pos.y = -10, .width = 1, .height = 1};
   Rectangle cactus_rect = {cactus.pos.x, cactus.pos.y, cactus.width,
                            cactus.height};
   Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
                            player.height};
 
-  if (CheckCollisionRecs(cactus_rect, player_rect)) {
-    printf("%f\n", player_rect.x);
-    player.color = RED;
-  } else {
-    player.color = WHITE;
+  // Check collision
+  if (CheckCollisionRecs(player_rect, cactus_rect) &&
+      player.damage_cooldown <= 0) {
+    PlaySound(hit_sound);
+    player.current_health--;
+    player.damage_cooldown = 0.5f;
+    shake_timer = 0.5f;
+  }
+
+  // Screen shake
+  if (shake_timer > 0) {
+    shake_timer -= dt;
+    float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+    float shake_magnitude = 10.0f;
+    camera.target.x += offset_x * shake_magnitude;
   }
 
   // --- Draw ---
