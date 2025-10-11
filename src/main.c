@@ -143,9 +143,7 @@ void update_draw(void) {
   // (TODO)clamp find a better way to reuse these tile values
   player.pos.x = Clamp(player.pos.x, -5.5, 7);
   Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
-  // camera.target = player_screen;
-  // not sure if this lerp shit makes it smoother or not
-  camera.target = Vector2Lerp(camera.target, player_screen, 10 * dt);
+  camera.target = player_screen;
   camera.offset = (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
   if (player.damage_cooldown > 0.0f) {
@@ -195,18 +193,6 @@ void update_draw(void) {
 
   BeginMode2D(camera);
 
-  // Draw left edge of world
-  // (NOTE) This hsould probably be offset by the play area
-  // float start_x = -2;
-  // float start_y = 20;
-  // for (int y = -37; y < 1; y++) {
-  //   for (int layer = 0; layer < 1; layer++) {
-  //     Vector3 wall_pos = {start_x - 1, start_y + y, layer * 10};
-  //     Vector2 wall_screen = isometric_projection(wall_pos);
-  //     DrawTextureV(tile_wall, wall_screen, WHITE);
-  //   }
-  // }
-
   int tile_y = floorf(player.pos.y);
   int tile_y_offset = 30;
   // Draw world
@@ -238,7 +224,7 @@ void update_draw(void) {
     }
   }
 
-  // Draw Hazards
+  // Draw Entities
   for (int i = 0; i < MAX_ENTITIES; i++) {
     Entity *entity = &entitys[i];
     // cull
