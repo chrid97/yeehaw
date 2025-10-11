@@ -17,6 +17,8 @@ const int VIRTUAL_WIDTH = 640;
 const int VIRTUAL_HEIGHT = 360;
 const int TILE_WIDTH = 32;
 const int TILE_HEIGHT = 16;
+static int current_frame = 0;
+static float frame_timer = 0.0f;
 
 #define MAX_OBSTACLES 100
 static Entity obstacles[MAX_OBSTACLES];
@@ -110,7 +112,7 @@ void update_draw(void) {
 
   // Draw world
   // (NOTE) figure out how to start from 0 instead of a negative number
-  for (int y = -200; y < 30; y++) { // draw from far to near
+  for (int y = -200; y < 30; y++) {
     for (int x = -5; x < 8; x++) {
       Vector3 world = {x, y, 0};
       Vector2 screen = isometric_projection(world);
@@ -119,15 +121,20 @@ void update_draw(void) {
   }
 
   // Draw player
+  int frame_count = 2;
+  frame_timer += dt;
+  if (frame_timer >= 0.15f) { // adjust for speed
+    frame_timer = 0.0f;
+    current_frame = (current_frame + 1) % frame_count;
+  }
   Vector2 projected =
       isometric_projection((Vector3){player.pos.x, player.pos.y, 0});
-  Rectangle source = {0, 16, 16, 16};
+  Rectangle source = {16 * current_frame, 16, 16, 16};
   Rectangle dest = {.x = projected.x,
                     .y = projected.y,
                     .width = player.width,
                     .height = player.height};
-  Vector2 origin = {0, 0};
-  DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
+  DrawTexturePro(player_sprite, source, dest, (Vector2){0, 0}, 0, player.color);
 
   EndMode2D();
 
