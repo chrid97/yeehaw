@@ -94,6 +94,9 @@ void init_game(void) {
     obstacles[i].pos.x = random_between(-5, 7);
     obstacles[i].pos.y = -20 - i * random_between(2, 4);
   }
+
+  // Reset timers
+  game_timer = 0;
 }
 
 void update_draw(void) {
