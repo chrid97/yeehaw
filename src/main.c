@@ -1,5 +1,4 @@
 // (TODO) Fix collision
-// (TODO) Fix drawing order
 // (TODO) Read from the spritesheet propely
 // (TODO) Implement shadows
 #include "main.h"
@@ -130,8 +129,8 @@ void init_game(void) {
       .type = PLAYER,
       .pos.x = 0,
       .pos.y = 0,
-      .width = 1,
-      .height = 1,
+      .width = 1.0f,
+      .height = 1.0f,
       .color = WHITE,
       .damage_cooldown = 0,
       .current_health = 5,
@@ -141,9 +140,6 @@ void init_game(void) {
       .target = (Vector2){0, 0},
       .offset = (Vector2){0, 0},
       .rotation = 0.0f,
-      // (TODO) Add button screen rotation to test
-      // rotation 10 doesnt look terrible maybe ill use that
-      // .rotation = 10.0f,
       .zoom = 1.0f,
   };
 
@@ -158,8 +154,8 @@ void update_draw(void) {
     init_game();
   }
 
-  float dt = GetFrameTime();
   UpdateMusicStream(bg_music);
+  float dt = GetFrameTime();
 
   // Scale game to window size
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
@@ -199,24 +195,46 @@ void update_draw(void) {
   camera.offset = (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
   // Player-entity collision
-  Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
-                           player.height};
   for (int i = 0; i < MAX_ENTITIES; i++) {
     Entity *entity = &entitys[i];
-    Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
-                             entity->height};
-    if (CheckCollisionRecs(player_rect, harard_rect) &&
-        player.damage_cooldown <= 0) {
-      PlaySound(hit_sound);
-      // player.current_health--;
-      player.damage_cooldown = 0.5f;
-      // shake_timer = 0.5f;
+    entity->width = 0.5f;
+    entity->height = 0.1f;
+    if (entity->type != PLAYER && player.damage_cooldown <= 0) {
+      Vector2 player_center = {player.pos.x, player.pos.y};
+      float player_radius = player.width / 2.0f;
 
-      DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
-                         player_rect.height, BLACK);
-      printf("%f\n", player_rect.width);
+      Vector2 entity_center = {entity->pos.x, entity->pos.y};
+      float entity_radius = entity->width / 2.0f;
+
+      float sum = entity_radius + player_radius;
+      float dist = Vector2Distance(player_center, entity_center);
+      if (dist < sum) {
+        player.damage_cooldown = 0.5f;
+        player.current_health--;
+        shake_timer = 0.5f;
+        PlaySound(hit_sound);
+      }
     }
   }
+
+  // Player-entity collision
+  // Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
+  //                          player.height};
+  // for (int i = 0; i < MAX_ENTITIES; i++) {
+  //   Entity *entity = &entitys[i];
+  //   Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
+  //                            entity->height};
+  //   if (CheckCollisionRecs(player_rect, harard_rect) &&
+  //       player.damage_cooldown <= 0) {
+  //     PlaySound(hit_sound);
+  //     // player.current_health--;
+  //     player.damage_cooldown = 0.5f;
+  //     // shake_timer = 0.5f;
+  //
+  //     DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
+  //                        player_rect.height, BLACK);
+  //   }
+  // }
 
   if (player.damage_cooldown > 0.0f) {
     player.damage_cooldown -= dt;
@@ -285,37 +303,35 @@ void update_draw(void) {
       continue;
     }
 
+    Vector2 projected =
+        isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
+
     if (entity->type == PLAYER) {
+      // PLAYER ANIMATION
       int frame_count = 2;
       frame_timer += dt;
       if (frame_timer >= 0.15f) { // adjust for speed
         frame_timer = 0.0f;
         current_frame = (current_frame + 1) % frame_count;
       }
-      Vector2 projected =
-          isometric_projection((Vector3){player.pos.x, player.pos.y, 0});
-      Rectangle source = {16 * current_frame, 16, 16, 16};
+
+      // DRAW PLAYER
+      Rectangle source = {16 * frame_count, 16, 16, 16};
       Rectangle dest = {.x = projected.x,
                         .y = projected.y,
                         .width = player.width * 28,
                         .height = player.height * 28};
       Vector2 origin = {player.width / 2.0f, player.height};
       DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
-      if (debug_on) {
-        // DrawRectangleLines(projected.x, projected.y, player.width *
-        // TILE_WIDTH,
-        //                    player.height * TILE_HEIGHT, BLACK);
-        // DrawCircle(projected.x, projected.y, 5, BLACK);
-      }
     } else {
+      DrawTextureV(rock_texture, projected, WHITE);
+    }
 
-      Vector2 obj =
-          isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
-      DrawTextureV(rock_texture, obj, WHITE);
-      if (debug_on) {
-        DrawRectangleLines(obj.x, obj.y, entity->width, entity->width, BLACK);
-        // DrawCircle(obj.x, obj.y, 5, BLACK);
-      }
+    if (debug_on) {
+      float radius = entity->width / 2.0f;
+      DrawEllipseLines(projected.x + TILE_WIDTH / 2.0f,
+                       projected.y + TILE_WIDTH / 2.0f, TILE_WIDTH * radius,
+                       TILE_HEIGHT * radius, RED);
     }
   }
 
