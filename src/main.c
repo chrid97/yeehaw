@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
@@ -71,14 +72,14 @@ void load_map1() {
   Vector2 last_wall = {PLAY_AREA_END, -20};
   int wall_length = PLAY_AREA_END - PLAY_AREA_START;
   int start = 0;
-  // entitys[start] = (Entity){.pos.x = PLAY_AREA_START, .pos.y = first_wall.y};
+  entitys[start] = (Entity){.pos.x = PLAY_AREA_START, .pos.y = first_wall.y};
   // entitys[wall_length] =
   //     (Entity){.pos.x = PLAY_AREA_END - 1.5, .pos.y = last_wall.y};
 
   for (int i = 0; i < MAX_ENTITIES; i++) {
     if (i < wall_length) {
-      entitys[i] = (Entity){.pos.x = i + PLAY_AREA_START, .pos.y = -20};
-      entity_length++;
+      // entitys[i] = (Entity){.pos.x = i + PLAY_AREA_START, .pos.y = -20};
+      // entity_length++;
     }
   }
 }
@@ -180,7 +181,7 @@ void update_draw(void) {
 
   game_timer += dt;
   // player.pos.y -= 10 * dt;
-  player.pos.y -= 5 * dt;
+  // player.pos.y -= 5 * dt;
   // (TODO)clamp find a better way to reuse these tile values
   player.pos.x = Clamp(player.pos.x, -5.5, 7);
   Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
@@ -203,9 +204,13 @@ void update_draw(void) {
     if (CheckCollisionRecs(player_rect, harard_rect) &&
         player.damage_cooldown <= 0) {
       PlaySound(hit_sound);
-      player.current_health--;
+      // player.current_health--;
       player.damage_cooldown = 0.5f;
-      shake_timer = 0.5f;
+      // shake_timer = 0.5f;
+
+      DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
+                         player_rect.height, BLACK);
+      printf("%f\n", player_rect.width);
     }
   }
 
@@ -279,8 +284,8 @@ void update_draw(void) {
         isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
     DrawTextureV(rock_texture, obj, WHITE);
     if (debug_on) {
-      DrawRectangleLines(obj.x, obj.y, rock_texture.width, rock_texture.height,
-                         BLACK);
+      DrawRectangleLines(obj.x, obj.y, entity->width, entity->width, BLACK);
+      // DrawCircle(obj.x, obj.y, 5, BLACK);
     }
   }
 
@@ -300,6 +305,11 @@ void update_draw(void) {
                     .height = player.height * 28};
   Vector2 origin = {player.width / 2.0f, player.height};
   DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
+  if (debug_on) {
+    // DrawRectangleLines(projected.x, projected.y, player.width * TILE_WIDTH,
+    //                    player.height * TILE_HEIGHT, BLACK);
+    // DrawCircle(projected.x, projected.y, 5, BLACK);
+  }
   EndMode2D();
 
   // Draw player health
@@ -311,7 +321,6 @@ void update_draw(void) {
   int font_size = (int)(40 * scale);
   const char *timer_text = TextFormat("%.1f", game_timer);
   int text_width = MeasureText(timer_text, font_size);
-
   DrawText(timer_text, (GetScreenWidth() - text_width) / 2, 0, font_size,
            WHITE);
   DrawFPS(0, 0);
@@ -319,8 +328,8 @@ void update_draw(void) {
 }
 
 int main(void) {
-  InitWindow(1920, 1080, "Yeehaw");
-  // InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
+  // InitWindow(1920, 1080, "Yeehaw");
+  InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
   // Uncap FPS because it makes my game feel like tash
   SetTargetFPS(0);
   InitAudioDevice();
