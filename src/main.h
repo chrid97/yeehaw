@@ -6,6 +6,11 @@
 
 typedef enum { GAME_OVER, PLAYING } State;
 
+typedef enum {
+  HAZARD,
+  PLAYER,
+} EntityType;
+
 typedef struct {
   float height;
   float width;
@@ -17,6 +22,7 @@ typedef struct {
   int max_health;
   Color color;
   float damage_cooldown;
+  EntityType type;
 } Entity;
 
 typedef struct {

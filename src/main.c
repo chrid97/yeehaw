@@ -1,5 +1,6 @@
 // (TODO) Fix collision
 // (TODO) Fix drawing order
+// (TODO) Read from the spritesheet propely
 // (TODO) Implement shadows
 #include "main.h"
 #include "raylib.h"
@@ -28,6 +29,9 @@ static float game_timer = 0.0f;
 
 #define MAX_ENTITIES 100
 static Entity entitys[MAX_ENTITIES];
+// (NOTE) maybe I'll need a max drawables or something and its own length but I
+// think this is ok for now
+static Entity *draw_list[MAX_ENTITIES];
 static int entity_length;
 static Entity player;
 static Camera2D camera;
@@ -49,11 +53,6 @@ static bool debug_on = true;
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
 
-// MAP
-#define MAP_WIDTH 13
-// maybe 1 tile should equal 1 meter
-#define MAP_HEIGHT 13
-
 int random_between(int min, int max) {
   if (max <= min) {
     return min;
@@ -66,8 +65,32 @@ Vector2 isometric_projection(Vector3 pos) {
                    (pos.x + pos.y) * (TILE_HEIGHT / 2.0f) - pos.z};
 }
 
+// Sort pointers in draw_list by on-screen depth
+static int cmp_draw_ptrs(const void *A, const void *B) {
+  const Entity *a = *(Entity *const *)A; // note the extra *
+  const Entity *b = *(Entity *const *)B;
+
+  float da = a->pos.x + a->pos.y;
+  float db = b->pos.x + b->pos.y;
+
+  if (da < db)
+    return -1;
+  if (da > db)
+    return 1;
+
+  if (a->pos.y < b->pos.y)
+    return -1;
+  if (a->pos.y > b->pos.y)
+    return 1;
+  if (a->pos.x < b->pos.x)
+    return -1;
+  if (a->pos.x > b->pos.x)
+    return 1;
+
+  return 0;
+}
+
 void load_map1() {
-  // int tile_map[MAP_HEIGHT][MAP_WIDTH] = {0};
   Vector2 first_wall = {PLAY_AREA_START, -20};
   Vector2 last_wall = {PLAY_AREA_END, -20};
   int wall_length = PLAY_AREA_END - PLAY_AREA_START;
@@ -104,6 +127,7 @@ void init_game(void) {
 
   // Init Game Objects
   player = (Entity){
+      .type = PLAYER,
       .pos.x = 0,
       .pos.y = 0,
       .width = 1,
@@ -123,18 +147,8 @@ void init_game(void) {
       .zoom = 1.0f,
   };
 
-  // Init Hazards
-  // for (int i = 0; i < MAX_ENTITIES; i++) {
-  //   entitys[i].width = 1;
-  //   entitys[i].height = 1;
-  //   entitys[i].color = WHITE;
-  //   entitys[i].pos.x = random_between(-5, 7);
-  //   entitys[i].pos.y = -20 - i * random_between(2, 4);
-  // }
-
   // Reset timers
   game_timer = 0;
-
   load_map1();
 }
 
@@ -144,19 +158,13 @@ void update_draw(void) {
     init_game();
   }
 
-  // maybe redo this
-  static float smooth_dt = 0.016f;
-  float raw_dt = GetFrameTime();
-  smooth_dt = Lerp(smooth_dt, raw_dt, 0.1f);
-  float dt = smooth_dt;
+  float dt = GetFrameTime();
   UpdateMusicStream(bg_music);
 
-  // scale
+  // Scale game to window size
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
   camera.zoom = fminf(scale_x, scale_y);
-
-  player.color = WHITE;
 
   // --- Input ---
   float speed = 5.0f;
@@ -178,7 +186,7 @@ void update_draw(void) {
   }
 
   // --- Update ---
-
+  player.color = WHITE;
   game_timer += dt;
   // player.pos.y -= 10 * dt;
   // player.pos.y -= 5 * dt;
@@ -186,13 +194,9 @@ void update_draw(void) {
   player.pos.x = Clamp(player.pos.x, -5.5, 7);
   Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
 
+  // Update camera position to follow player
   camera.target = player_screen;
   camera.offset = (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
-
-  if (player.damage_cooldown > 0.0f) {
-    player.damage_cooldown -= dt;
-    player.color = RED;
-  }
 
   // Player-entity collision
   Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
@@ -214,6 +218,11 @@ void update_draw(void) {
     }
   }
 
+  if (player.damage_cooldown > 0.0f) {
+    player.damage_cooldown -= dt;
+    player.color = RED;
+  }
+
   // Screen shake
   if (shake_timer > 0) {
     shake_timer -= dt;
@@ -222,17 +231,13 @@ void update_draw(void) {
     camera.target.x += offset_x * shake_magnitude;
   }
 
-  // lol i guess what i could have done instead if spawn them offscreen so i
-  // dont need to init recycle hazards for (int i = 0; i < MAX_ENTITIES; i++) {
-  //   Entity *entity = &entitys[i];
-  //   if (entity->pos.y > player.pos.y + 20) {
-  //     entitys[i].width = 1;
-  //     entitys[i].height = 1;
-  //     entitys[i].color = WHITE;
-  //     entitys[i].pos.x = random_between(-5, 7);
-  //     entitys[i].pos.y = player.pos.y - 40 - i * random_between(2, 4);
-  //   }
-  // }
+  // Update Draw List
+  draw_list[0] = &player;
+  for (int i = 1; i < MAX_ENTITIES; i++) {
+    Entity *entity = &entitys[i];
+    draw_list[i] = entity;
+  }
+  qsort(draw_list, MAX_ENTITIES, sizeof(Entity *), cmp_draw_ptrs);
 
   // --- Draw ---
   BeginDrawing();
@@ -271,45 +276,49 @@ void update_draw(void) {
     }
   }
 
-  // Draw Entities
+  // --- Draw Entities ---
   for (int i = 0; i < MAX_ENTITIES; i++) {
-    Entity *entity = &entitys[i];
+    Entity *entity = draw_list[i];
     // cull
     if (entity->pos.y < player.pos.y - 40 ||
         entity->pos.y > player.pos.y + 20) {
       continue;
     }
 
-    Vector2 obj =
-        isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
-    DrawTextureV(rock_texture, obj, WHITE);
-    if (debug_on) {
-      DrawRectangleLines(obj.x, obj.y, entity->width, entity->width, BLACK);
-      // DrawCircle(obj.x, obj.y, 5, BLACK);
+    if (entity->type == PLAYER) {
+      int frame_count = 2;
+      frame_timer += dt;
+      if (frame_timer >= 0.15f) { // adjust for speed
+        frame_timer = 0.0f;
+        current_frame = (current_frame + 1) % frame_count;
+      }
+      Vector2 projected =
+          isometric_projection((Vector3){player.pos.x, player.pos.y, 0});
+      Rectangle source = {16 * current_frame, 16, 16, 16};
+      Rectangle dest = {.x = projected.x,
+                        .y = projected.y,
+                        .width = player.width * 28,
+                        .height = player.height * 28};
+      Vector2 origin = {player.width / 2.0f, player.height};
+      DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
+      if (debug_on) {
+        // DrawRectangleLines(projected.x, projected.y, player.width *
+        // TILE_WIDTH,
+        //                    player.height * TILE_HEIGHT, BLACK);
+        // DrawCircle(projected.x, projected.y, 5, BLACK);
+      }
+    } else {
+
+      Vector2 obj =
+          isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
+      DrawTextureV(rock_texture, obj, WHITE);
+      if (debug_on) {
+        DrawRectangleLines(obj.x, obj.y, entity->width, entity->width, BLACK);
+        // DrawCircle(obj.x, obj.y, 5, BLACK);
+      }
     }
   }
 
-  // Draw player
-  int frame_count = 2;
-  frame_timer += dt;
-  if (frame_timer >= 0.15f) { // adjust for speed
-    frame_timer = 0.0f;
-    current_frame = (current_frame + 1) % frame_count;
-  }
-  Vector2 projected =
-      isometric_projection((Vector3){player.pos.x, player.pos.y, 0});
-  Rectangle source = {16 * current_frame, 16, 16, 16};
-  Rectangle dest = {.x = projected.x,
-                    .y = projected.y,
-                    .width = player.width * 28,
-                    .height = player.height * 28};
-  Vector2 origin = {player.width / 2.0f, player.height};
-  DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
-  if (debug_on) {
-    // DrawRectangleLines(projected.x, projected.y, player.width * TILE_WIDTH,
-    //                    player.height * TILE_HEIGHT, BLACK);
-    // DrawCircle(projected.x, projected.y, 5, BLACK);
-  }
   EndMode2D();
 
   // Draw player health
@@ -329,7 +338,7 @@ void update_draw(void) {
 
 int main(void) {
   // InitWindow(1920, 1080, "Yeehaw");
-  InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
+  InitWindow(VIRTUAL_WIDTH * 3, VIRTUAL_HEIGHT * 3, "Yeehaw");
   // Uncap FPS because it makes my game feel like tash
   SetTargetFPS(0);
   InitAudioDevice();
