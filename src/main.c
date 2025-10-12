@@ -1,3 +1,6 @@
+// (TODO) Fix collision
+// (TODO) Fix drawing order
+// (TODO) Implement shadows
 #include "main.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -24,6 +27,7 @@ static float game_timer = 0.0f;
 
 #define MAX_ENTITIES 100
 static Entity entitys[MAX_ENTITIES];
+static int entity_length;
 static Entity player;
 static Camera2D camera;
 
@@ -38,6 +42,17 @@ static Texture2D border_tile;
 static Music bg_music;
 static Sound hit_sound;
 
+// DEBUG
+static bool debug_on = true;
+
+int PLAY_AREA_START = -5;
+int PLAY_AREA_END = 8;
+
+// MAP
+#define MAP_WIDTH 13
+// maybe 1 tile should equal 1 meter
+#define MAP_HEIGHT 13
+
 int random_between(int min, int max) {
   if (max <= min) {
     return min;
@@ -48,6 +63,24 @@ int random_between(int min, int max) {
 Vector2 isometric_projection(Vector3 pos) {
   return (Vector2){(pos.x - pos.y) * (TILE_WIDTH / 2.0f),
                    (pos.x + pos.y) * (TILE_HEIGHT / 2.0f) - pos.z};
+}
+
+void load_map1() {
+  // int tile_map[MAP_HEIGHT][MAP_WIDTH] = {0};
+  Vector2 first_wall = {PLAY_AREA_START, -20};
+  Vector2 last_wall = {PLAY_AREA_END, -20};
+  int wall_length = PLAY_AREA_END - PLAY_AREA_START;
+  int start = 0;
+  // entitys[start] = (Entity){.pos.x = PLAY_AREA_START, .pos.y = first_wall.y};
+  // entitys[wall_length] =
+  //     (Entity){.pos.x = PLAY_AREA_END - 1.5, .pos.y = last_wall.y};
+
+  for (int i = 0; i < MAX_ENTITIES; i++) {
+    if (i < wall_length) {
+      entitys[i] = (Entity){.pos.x = i + PLAY_AREA_START, .pos.y = -20};
+      entity_length++;
+    }
+  }
 }
 
 void init_game(void) {
@@ -90,16 +123,18 @@ void init_game(void) {
   };
 
   // Init Hazards
-  for (int i = 0; i < MAX_ENTITIES; i++) {
-    entitys[i].width = 1;
-    entitys[i].height = 1;
-    entitys[i].color = WHITE;
-    entitys[i].pos.x = random_between(-5, 7);
-    entitys[i].pos.y = -20 - i * random_between(2, 4);
-  }
+  // for (int i = 0; i < MAX_ENTITIES; i++) {
+  //   entitys[i].width = 1;
+  //   entitys[i].height = 1;
+  //   entitys[i].color = WHITE;
+  //   entitys[i].pos.x = random_between(-5, 7);
+  //   entitys[i].pos.y = -20 - i * random_between(2, 4);
+  // }
 
   // Reset timers
   game_timer = 0;
+
+  load_map1();
 }
 
 void update_draw(void) {
@@ -108,6 +143,7 @@ void update_draw(void) {
     init_game();
   }
 
+  // maybe redo this
   static float smooth_dt = 0.016f;
   float raw_dt = GetFrameTime();
   smooth_dt = Lerp(smooth_dt, raw_dt, 0.1f);
@@ -136,13 +172,19 @@ void update_draw(void) {
     player.pos.y += dt * speed;
   }
 
+  if (IsKeyPressed(KEY_P)) {
+    debug_on = !debug_on;
+  }
+
   // --- Update ---
 
   game_timer += dt;
+  // player.pos.y -= 10 * dt;
   player.pos.y -= 5 * dt;
   // (TODO)clamp find a better way to reuse these tile values
   player.pos.x = Clamp(player.pos.x, -5.5, 7);
   Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
+
   camera.target = player_screen;
   camera.offset = (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
@@ -175,17 +217,17 @@ void update_draw(void) {
     camera.target.x += offset_x * shake_magnitude;
   }
 
-  // recycle hazards
-  for (int i = 0; i < MAX_ENTITIES; i++) {
-    Entity *entity = &entitys[i];
-    if (entity->pos.y > player.pos.y + 20) {
-      entitys[i].width = 1;
-      entitys[i].height = 1;
-      entitys[i].color = WHITE;
-      entitys[i].pos.x = random_between(-5, 7);
-      entitys[i].pos.y = player.pos.y - 40 - i * random_between(2, 4);
-    }
-  }
+  // lol i guess what i could have done instead if spawn them offscreen so i
+  // dont need to init recycle hazards for (int i = 0; i < MAX_ENTITIES; i++) {
+  //   Entity *entity = &entitys[i];
+  //   if (entity->pos.y > player.pos.y + 20) {
+  //     entitys[i].width = 1;
+  //     entitys[i].height = 1;
+  //     entitys[i].color = WHITE;
+  //     entitys[i].pos.x = random_between(-5, 7);
+  //     entitys[i].pos.y = player.pos.y - 40 - i * random_between(2, 4);
+  //   }
+  // }
 
   // --- Draw ---
   BeginDrawing();
@@ -207,7 +249,7 @@ void update_draw(void) {
     }
 
     // Draw play area
-    for (int x = -5; x < 8; x++) {
+    for (int x = PLAY_AREA_START; x < PLAY_AREA_END; x++) {
       Vector3 world = {x, y, 0};
       Vector2 screen = isometric_projection(world);
       // not sure if this shit smooths teh game either, idts
@@ -236,6 +278,10 @@ void update_draw(void) {
     Vector2 obj =
         isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
     DrawTextureV(rock_texture, obj, WHITE);
+    if (debug_on) {
+      DrawRectangleLines(obj.x, obj.y, rock_texture.width, rock_texture.height,
+                         BLACK);
+    }
   }
 
   // Draw player
