@@ -1,3 +1,4 @@
+// (TODO) Squish player on damage
 // (TODO) Fix collision
 // (TODO) Read from the spritesheet propely
 // (TODO) Implement shadows
@@ -31,7 +32,8 @@ static Entity entitys[MAX_ENTITIES];
 // (NOTE) maybe I'll need a max drawables or something and its own length but I
 // think this is ok for now
 static Entity *draw_list[MAX_ENTITIES];
-static int entity_length;
+// Start at one becasue I add the player at the end of every update loop
+static int entity_length = 1;
 static Entity player;
 static Camera2D camera;
 
@@ -65,7 +67,7 @@ Vector2 isometric_projection(Vector3 pos) {
 }
 
 // Sort pointers in draw_list by on-screen depth
-static int cmp_draw_ptrs(const void *A, const void *B) {
+int cmp_draw_ptrs(const void *A, const void *B) {
   const Entity *a = *(Entity *const *)A; // note the extra *
   const Entity *b = *(Entity *const *)B;
 
@@ -89,26 +91,74 @@ static int cmp_draw_ptrs(const void *A, const void *B) {
   return 0;
 }
 
+// I guess this can add to the entity array then reutrn a pointer to the newly
+// created enitty? or should i just return a new entitY?
+Entity *entity_spawn() {}
+
 void load_map1() {
   Vector2 first_wall = {PLAY_AREA_START, -20};
   Vector2 last_wall = {PLAY_AREA_END, -20};
   int wall_length = PLAY_AREA_END - PLAY_AREA_START;
-  int start = 0;
-  entitys[start] = (Entity){.pos.x = PLAY_AREA_START, .pos.y = first_wall.y};
+  // entitys[0] = (Entity){.pos.x = PLAY_AREA_START,
+  //                       .pos.y = first_wall.y,
+  //                       .width = 1,
+  //                       .height = 1,
+  //                       .type = ENTITY_HAZARD};
+  // entity_length++;
   // entitys[wall_length] =
   //     (Entity){.pos.x = PLAY_AREA_END - 1.5, .pos.y = last_wall.y};
 
-  for (int i = 0; i < MAX_ENTITIES; i++) {
+  for (int i = 0; i < wall_length; i++) {
+    if (i % 9 == 0) {
+      continue;
+    }
     if (i < wall_length) {
-      // entitys[i] = (Entity){.pos.x = i + PLAY_AREA_START, .pos.y = -20};
-      // entity_length++;
+      entitys[i] = (Entity){.pos.x = i + PLAY_AREA_START,
+                            .pos.y = -20,
+                            .width = 1,
+                            .height = 1,
+                            .type = ENTITY_HAZARD,
+                            .color = WHITE};
+      entity_length++;
+    }
+  }
+
+  // printf("%i\n", entity_length);
+
+  for (int i = 0; i < wall_length; i++) {
+    if (i % 9 == 0) {
+      continue;
+    }
+
+    if (i < wall_length + wall_length) {
+      entitys[entity_length++] = (Entity){.pos.x = i + PLAY_AREA_START,
+                                          .pos.y = -22,
+                                          .width = 1,
+                                          .height = 1,
+                                          .type = ENTITY_HAZARD,
+                                          .color = WHITE};
+    }
+  }
+
+  for (int i = 0; i < wall_length; i++) {
+    if (i % 9 == 0) {
+      continue;
+    }
+
+    if (i < wall_length + wall_length) {
+      entitys[entity_length++] = (Entity){.pos.x = i + PLAY_AREA_START,
+                                          .pos.y = -24,
+                                          .width = 1,
+                                          .height = 1,
+                                          .type = ENTITY_HAZARD,
+                                          .color = WHITE};
     }
   }
 }
 
 void init_game(void) {
   // Load Textures
-  player_sprite = LoadTexture("assets/horse.png");
+  player_sprite = LoadTexture("assets/iso-horse.png");
   tile_wall = LoadTexture("assets/tileset/tile_057.png");
   tile000 = LoadTexture("assets/tileset/tile_009.png");
   // tile000 = LoadTexture("assets/tileset/tile_014.png");
@@ -126,11 +176,11 @@ void init_game(void) {
 
   // Init Game Objects
   player = (Entity){
-      .type = PLAYER,
+      .type = ENTITY_PLAYER,
       .pos.x = 0,
       .pos.y = 0,
-      .width = 1.0f,
-      .height = 1.0f,
+      .width = 1.0f * 0.5,
+      .height = 0.75f,
       .color = WHITE,
       .damage_cooldown = 0,
       .current_health = 5,
@@ -145,6 +195,11 @@ void init_game(void) {
 
   // Reset timers
   game_timer = 0;
+
+  // Entity/map stuff
+  for (int i = 0; i < MAX_ENTITIES; i++) {
+    entitys[i].pos = (Vector2){9999.0f, 9999.0f}; // hide uninitialized entities
+  }
   load_map1();
 }
 
@@ -180,14 +235,19 @@ void update_draw(void) {
   if (IsKeyPressed(KEY_P)) {
     debug_on = !debug_on;
   }
+  if (IsKeyPressed(KEY_R)) {
+    init_game();
+  }
 
   // --- Update ---
   player.color = WHITE;
   game_timer += dt;
-  // player.pos.y -= 10 * dt;
+  if (debug_on) {
+    player.pos.y -= 8 * dt;
+  }
   // player.pos.y -= 5 * dt;
   // (TODO)clamp find a better way to reuse these tile values
-  player.pos.x = Clamp(player.pos.x, -5.5, 7);
+  player.pos.x = Clamp(player.pos.x, -5.5, 8);
   Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
 
   // Update camera position to follow player
@@ -195,46 +255,46 @@ void update_draw(void) {
   camera.offset = (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
   // Player-entity collision
-  for (int i = 0; i < MAX_ENTITIES; i++) {
-    Entity *entity = &entitys[i];
-    entity->width = 0.5f;
-    entity->height = 0.1f;
-    if (entity->type != PLAYER && player.damage_cooldown <= 0) {
-      Vector2 player_center = {player.pos.x, player.pos.y};
-      float player_radius = player.width / 2.0f;
-
-      Vector2 entity_center = {entity->pos.x, entity->pos.y};
-      float entity_radius = entity->width / 2.0f;
-
-      float sum = entity_radius + player_radius;
-      float dist = Vector2Distance(player_center, entity_center);
-      if (dist < sum) {
-        player.damage_cooldown = 0.5f;
-        player.current_health--;
-        shake_timer = 0.5f;
-        PlaySound(hit_sound);
-      }
-    }
-  }
-
-  // Player-entity collision
-  // Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
-  //                          player.height};
-  // for (int i = 0; i < MAX_ENTITIES; i++) {
-  //   Entity *entity = &entitys[i];
-  //   Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
-  //                            entity->height};
-  //   if (CheckCollisionRecs(player_rect, harard_rect) &&
-  //       player.damage_cooldown <= 0) {
-  //     PlaySound(hit_sound);
-  //     // player.current_health--;
-  //     player.damage_cooldown = 0.5f;
-  //     // shake_timer = 0.5f;
+  // for (int i = 0; i < entity_length; i++) {
+  // Entity *entity = &entitys[i];
+  // entity->width = 1.0f;
+  // entity->height = 1.0f;
+  // if (entity->type == ENTITY_HAZARD && player.damage_cooldown <= 0) {
+  //   Vector2 player_center = {player.pos.x, player.pos.y};
+  //   float player_radius = player.width / 2.0f;
   //
-  //     DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
-  //                        player_rect.height, BLACK);
+  //   Vector2 entity_center = {entity->pos.x, entity->pos.y};
+  //   float entity_radius = entity->width / 2.0f;
+  //
+  //   float sum = entity_radius + player_radius;
+  //   float dist = Vector2Distance(player_center, entity_center);
+  //   if (dist < sum) {
+  //     player.damage_cooldown = 0.5f;
+  //     // player.current_health--;
+  //     // shake_timer = 0.5f;
+  //     PlaySound(hit_sound);
   //   }
   // }
+  // }
+
+  // Player-entity collision
+  Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
+                           player.height};
+  for (int i = 0; i < MAX_ENTITIES; i++) {
+    Entity *entity = &entitys[i];
+    Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
+                             entity->height};
+    if (CheckCollisionRecs(player_rect, harard_rect) &&
+        player.damage_cooldown <= 0) {
+      PlaySound(hit_sound);
+      // player.current_health--;
+      player.damage_cooldown = 0.5f;
+      // shake_timer = 0.5f;
+
+      DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
+                         player_rect.height, BLACK);
+    }
+  }
 
   if (player.damage_cooldown > 0.0f) {
     player.damage_cooldown -= dt;
@@ -250,17 +310,16 @@ void update_draw(void) {
   }
 
   // Update Draw List
-  draw_list[0] = &player;
-  for (int i = 1; i < MAX_ENTITIES; i++) {
-    Entity *entity = &entitys[i];
-    draw_list[i] = entity;
+  int draw_count = 0;
+  for (int i = 0; i < entity_length; i++) {
+    draw_list[draw_count++] = &entitys[i];
   }
-  qsort(draw_list, MAX_ENTITIES, sizeof(Entity *), cmp_draw_ptrs);
+  draw_list[draw_count++] = &player;
+  qsort(draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
 
   // --- Draw ---
   BeginDrawing();
   ClearBackground(ORANGE);
-
   BeginMode2D(camera);
 
   int tile_y = floorf(player.pos.y);
@@ -295,7 +354,8 @@ void update_draw(void) {
   }
 
   // --- Draw Entities ---
-  for (int i = 0; i < MAX_ENTITIES; i++) {
+  for (int i = 0; i < entity_length; i++) {
+    // printf("whats happening\n");
     Entity *entity = draw_list[i];
     // cull
     if (entity->pos.y < player.pos.y - 40 ||
@@ -306,7 +366,7 @@ void update_draw(void) {
     Vector2 projected =
         isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
 
-    if (entity->type == PLAYER) {
+    if (entity->type == ENTITY_PLAYER) {
       // PLAYER ANIMATION
       int frame_count = 2;
       frame_timer += dt;
@@ -316,23 +376,50 @@ void update_draw(void) {
       }
 
       // DRAW PLAYER
-      Rectangle source = {16 * frame_count, 16, 16, 16};
-      Rectangle dest = {.x = projected.x,
-                        .y = projected.y,
-                        .width = player.width * 28,
-                        .height = player.height * 28};
-      Vector2 origin = {player.width / 2.0f, player.height};
-      DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
-    } else {
-      DrawTextureV(rock_texture, projected, WHITE);
+      // Rectangle source = {16 * frame_count, 16, 16, 16};
+      // Rectangle source = {0, 0, 28, 28};
+      // Rectangle dest = {.x = projected.x,
+      //                   .y = projected.y,
+      //                   .width = player.width * 28,
+      //                   .height = player.height * 28};
+      // Vector2 origin = {player.width / 2.0f, player.height};
+      // DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
     }
 
-    if (debug_on) {
-      float radius = entity->width / 2.0f;
-      DrawEllipseLines(projected.x + TILE_WIDTH / 2.0f,
-                       projected.y + TILE_WIDTH / 2.0f, TILE_WIDTH * radius,
-                       TILE_HEIGHT * radius, RED);
+    if (entity->type == ENTITY_HAZARD) {
+      // The debug circles are being drawn in the middle of the sprite so i
+      // think if we want to the collision to be at the bottom of the sprite we
+      // should move the sprite up?
+      // Vector2 origin = {entity->width / 2.0f, entity->height};
+      // Vector2 origin = {entity->width / 2.0f, 0};
+      // DrawTextureV(rock_texture, projected, WHITE);
+      // DrawTexturePro(rock_texture, (Rectangle){0, 0, 32, 32},
+      //                (Rectangle){projected.x, projected.y,
+      //                rock_texture.width,
+      //                            rock_texture.height},
+      //                origin, 0, entity->color);
     }
+
+    // if (debug_on) {
+    Rectangle rect = {entity->pos.x, entity->pos.y, entity->width,
+                      entity->height};
+
+    // Project corners to screen
+    Vector2 p1 = isometric_projection((Vector3){rect.x, rect.y, 0});
+    Vector2 p2 =
+        isometric_projection((Vector3){rect.x + rect.width, rect.y, 0});
+    Vector2 p3 = isometric_projection(
+        (Vector3){rect.x + rect.width, rect.y + rect.height, 0});
+    Vector2 p4 =
+        isometric_projection((Vector3){rect.x, rect.y + rect.height, 0});
+
+    // Draw outline in world space (red for hazards, green for player)
+    Color c = (entity->type == ENTITY_HAZARD) ? RED : GREEN;
+    DrawLineV(p1, p2, c);
+    DrawLineV(p2, p3, c);
+    DrawLineV(p3, p4, c);
+    DrawLineV(p4, p1, c);
+    // }
   }
 
   EndMode2D();

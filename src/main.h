@@ -7,8 +7,9 @@
 typedef enum { GAME_OVER, PLAYING } State;
 
 typedef enum {
-  HAZARD,
-  PLAYER,
+  ENTITY_NONE = 0,
+  ENTITY_HAZARD,
+  ENTITY_PLAYER,
 } EntityType;
 
 typedef struct {
