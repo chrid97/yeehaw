@@ -26,13 +26,12 @@ static float frame_timer = 0.0f;
 static float shake_timer = 0.0f;
 static float game_timer = 0.0f;
 
-#define MAX_ENTITIES 100
+#define MAX_ENTITIES 1000
 static Entity entitys[MAX_ENTITIES];
 // (NOTE) maybe I'll need a max drawables or something and its own length but I
 // think this is ok for now
 static Entity *draw_list[MAX_ENTITIES];
-// Start at one becasue I add the player at the end of every update loop
-static int entity_length = 1;
+static int entity_length = 0;
 static Entity player;
 static Camera2D camera;
 
@@ -49,6 +48,7 @@ static Sound hit_sound;
 
 // DEBUG
 static bool debug_on = true;
+static bool automove_on = true;
 
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
@@ -90,9 +90,8 @@ int cmp_draw_ptrs(const void *A, const void *B) {
   return 0;
 }
 
-// I guess this can add to the entity array then reutrn a pointer to the newly
-// created enitty? or should i just return a new entitY?
 Entity *entity_spawn(float x, float y, EntityType type) {
+  assert(entity_length < MAX_ENTITIES && "Entity overflow!");
   entitys[entity_length++] = (Entity){.pos.x = x,
                                       .pos.y = y,
                                       .width = 1,
@@ -137,85 +136,16 @@ void load_map(const char *path) {
   fclose(f);
 }
 
-void load_map1() {
-  Vector2 first_wall = {PLAY_AREA_START, -20};
-  Vector2 last_wall = {PLAY_AREA_END, -20};
-  int wall_length = PLAY_AREA_END - PLAY_AREA_START;
-  // entitys[0] = (Entity){.pos.x = PLAY_AREA_START,
-  //                       .pos.y = first_wall.y,
-  //                       .width = 1,
-  //                       .height = 1,
-  //                       .type = ENTITY_HAZARD};
-  // entity_length++;
-  // entitys[wall_length] =
-  //     (Entity){.pos.x = PLAY_AREA_END - 1.5, .pos.y = last_wall.y};
-
-  for (int i = 0; i < wall_length; i++) {
-    if (i % 9 == 0) {
-      continue;
-    }
-    if (i < wall_length) {
-      entitys[i] = (Entity){.pos.x = i + PLAY_AREA_START,
-                            .pos.y = -20,
-                            .width = 1,
-                            .height = 1,
-                            .type = ENTITY_HAZARD,
-                            .color = WHITE};
-      entity_length++;
-    }
-  }
-
-  // printf("%i\n", entity_length);
-
-  for (int i = 0; i < wall_length; i++) {
-    if (i % 9 == 0) {
-      continue;
-    }
-
-    if (i < wall_length + wall_length) {
-      entitys[entity_length++] = (Entity){.pos.x = i + PLAY_AREA_START,
-                                          .pos.y = -22,
-                                          .width = 1,
-                                          .height = 1,
-                                          .type = ENTITY_HAZARD,
-                                          .color = WHITE};
-    }
-  }
-
-  for (int i = 0; i < wall_length; i++) {
-    if (i % 9 == 0) {
-      continue;
-    }
-
-    if (i < wall_length + wall_length) {
-      entitys[entity_length++] = (Entity){.pos.x = i + PLAY_AREA_START,
-                                          .pos.y = -24,
-                                          .width = 1,
-                                          .height = 1,
-                                          .type = ENTITY_HAZARD,
-                                          .color = WHITE};
-    }
-  }
-
-  for (int i = 0; i < wall_length; i++) {
-    if (i % 2 == 0) {
-      continue;
-    }
-
-    if (i < wall_length + wall_length) {
-      entitys[entity_length++] = (Entity){.pos.x = i + PLAY_AREA_START,
-                                          .pos.y = -28,
-                                          .width = 1,
-                                          .height = 1,
-                                          .type = ENTITY_HAZARD,
-                                          .color = WHITE};
-    }
-  }
-}
-
 void init_game(void) {
+  // Entity/map stuff
+  entity_length = 0;
+  for (int i = 0; i < MAX_ENTITIES; i++) {
+    entitys[i].pos = (Vector2){9999.0f, 9999.0f}; // hide uninitialized
+    entitys[i].type = ENTITY_NONE;
+  }
+
   // Load Textures
-  player_sprite = LoadTexture("assets/iso-horse.png");
+  player_sprite = LoadTexture("assets/horse.png");
   tile_wall = LoadTexture("assets/tileset/tile_057.png");
   tile000 = LoadTexture("assets/tileset/tile_009.png");
   // tile000 = LoadTexture("assets/tileset/tile_014.png");
@@ -253,11 +183,6 @@ void init_game(void) {
   // Reset timers
   game_timer = 0;
 
-  // Entity/map stuff
-  for (int i = 0; i < MAX_ENTITIES; i++) {
-    entitys[i].pos = (Vector2){9999.0f, 9999.0f}; // hide uninitialized entities
-  }
-  // load_map1();
   load_map("maps/map1.txt");
 }
 
@@ -304,6 +229,10 @@ void update_draw(void) {
   if (IsKeyPressed(KEY_P)) {
     debug_on = !debug_on;
   }
+  if (IsKeyPressed(KEY_M)) {
+    automove_on = !automove_on;
+  }
+
   if (IsKeyPressed(KEY_R)) {
     init_game();
   }
@@ -311,7 +240,7 @@ void update_draw(void) {
   // --- Update ---
   player.color = WHITE;
   game_timer += dt;
-  if (debug_on) {
+  if (automove_on) {
     player.pos.y -= 8 * dt;
   }
   // (TODO)clamp find a better way to reuse these tile values
@@ -388,6 +317,7 @@ void update_draw(void) {
     draw_list[draw_count++] = &entitys[i];
   }
   draw_list[draw_count++] = &player;
+  printf("add player?: %i\n", draw_count);
   qsort(draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
 
   // --- Draw ---
@@ -427,7 +357,7 @@ void update_draw(void) {
   }
 
   // --- Draw Entities ---
-  for (int i = 0; i < entity_length; i++) {
+  for (int i = 0; i < draw_count; i++) {
     Entity *entity = draw_list[i];
     // cull
     if (entity->pos.y < player.pos.y - 40 ||
@@ -437,8 +367,8 @@ void update_draw(void) {
 
     Vector2 projected =
         isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
-
     if (entity->type == ENTITY_PLAYER) {
+      printf("player drawn\n");
       // PLAYER ANIMATION
       int frame_count = 2;
       frame_timer += dt;
@@ -448,32 +378,26 @@ void update_draw(void) {
       }
 
       // DRAW PLAYER
-      // Rectangle source = {16 * frame_count, 16, 16, 16};
       // Rectangle source = {0, 0, 28, 28};
-      // Rectangle dest = {.x = projected.x,
-      //                   .y = projected.y,
-      //                   .width = player.width * 28,
-      //                   .height = player.height * 28};
-      // Vector2 origin = {player.width / 2.0f, player.height};
-      // DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
+      Rectangle source = {16 * current_frame, 16, 16, 16};
+      Rectangle dest = {.x = projected.x,
+                        .y = projected.y,
+                        .width = player.width * 32,
+                        .height = player.height * 16};
+      Vector2 origin = {10, 5};
+      DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
+    } else if (entity->type == ENTITY_HAZARD) {
+      Vector2 origin = {rock_texture.width / 2.0f, rock_texture.height / 2.0f};
+      Rectangle dst = {projected.x, projected.y, rock_texture.width,
+                       rock_texture.height};
+      DrawTexturePro(rock_texture, (Rectangle){0, 0, 32, 32}, dst, origin, 0,
+                     entity->color);
+    } else if (entity->type == ENTITY_BULLET) {
+      DrawRectangle(projected.x, projected.y, entity->width * 32,
+                    entity->height * 16, entity->color);
     }
 
-    if (entity->type == ENTITY_HAZARD) {
-      // The debug circles are being drawn in the middle of the sprite so i
-      // think if we want to the collision to be at the bottom of the sprite we
-      // should move the sprite up?
-      // Vector2 origin = {entity->width / 2.0f, entity->height};
-      // Vector2 origin = {entity->width / 2.0f, 0};
-      // DrawTextureV(rock_texture, projected, WHITE);
-      // DrawTexturePro(rock_texture, (Rectangle){0, 0, 32, 32},
-      //                (Rectangle){projected.x, projected.y,
-      //                rock_texture.width,
-      //                            rock_texture.height},
-      //                origin, 0, entity->color);
-    }
-
-    if (entity->type == ENTITY_HAZARD || entity->type == ENTITY_PLAYER) {
-      // if (debug_on) {
+    if (debug_on && entity->type != ENTITY_BULLET) {
       Rectangle rect = {entity->pos.x, entity->pos.y, entity->width,
                         entity->height};
 
@@ -492,12 +416,6 @@ void update_draw(void) {
       DrawLineV(p2, p3, c);
       DrawLineV(p3, p4, c);
       DrawLineV(p4, p1, c);
-      // }
-    }
-
-    if (entity->type == ENTITY_BULLET) {
-      DrawRectangle(projected.x, projected.y, entity->width * 32,
-                    entity->height * 16, entity->color);
     }
   }
 
