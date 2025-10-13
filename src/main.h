@@ -10,20 +10,22 @@ typedef enum {
   ENTITY_NONE = 0,
   ENTITY_HAZARD,
   ENTITY_PLAYER,
+  ENTITY_BULLET,
 } EntityType;
 
 typedef struct {
+  EntityType type;
+
   float height;
   float width;
   Vector2 pos;
   Vector2 velocity;
-  // maybe is_on_screen is a better name?
-  bool is_active;
+
   int current_health;
   int max_health;
-  Color color;
+
   float damage_cooldown;
-  EntityType type;
+  Color color;
 } Entity;
 
 typedef struct {

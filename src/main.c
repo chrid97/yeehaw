@@ -1,5 +1,4 @@
 // (TODO) Squish player on damage
-// (TODO) Fix collision
 // (TODO) Read from the spritesheet propely
 // (TODO) Implement shadows
 #include "main.h"
@@ -93,7 +92,50 @@ int cmp_draw_ptrs(const void *A, const void *B) {
 
 // I guess this can add to the entity array then reutrn a pointer to the newly
 // created enitty? or should i just return a new entitY?
-Entity *entity_spawn() {}
+Entity *entity_spawn(float x, float y, EntityType type) {
+  entitys[entity_length++] = (Entity){.pos.x = x,
+                                      .pos.y = y,
+                                      .width = 1,
+                                      .height = 1,
+                                      .type = type,
+                                      .color = WHITE};
+
+  return &entitys[entity_length];
+}
+
+void load_map(const char *path) {
+  FILE *f = fopen(path, "r");
+  if (!f) {
+    printf("Failed to open file!\n");
+    return;
+  }
+
+  // printf("File opened!\n");
+  char line[14];
+  int y = 0;
+  while (fgets(line, sizeof(line), f)) {
+    // printf("%s\n", line);
+    for (int x = 0; line[x] != '\0' && line[x] != '\n'; x++) {
+      char c = line[x];
+      if (c == '^') {
+        entity_spawn(x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
+      }
+      // printf("%c", c);
+    }
+    y--;
+    // printf("\n");
+
+    //   for (int x = 0; line[x] != '\0' && line[x] != '\n'; x++) {
+    //     char c = line[x];
+    //     if (c == '#') {
+    //       // entity_spawn(x + PLAY_AREA_START, y - 20, ENTITY_HAZARD);
+    //     } else if (c == '^') {
+    //       // entity_spawn(x + PLAY_AREA_START, y - 20, ENTITY_HAZARD);
+    //     }
+    //   }
+  }
+  fclose(f);
+}
 
 void load_map1() {
   Vector2 first_wall = {PLAY_AREA_START, -20};
@@ -154,6 +196,21 @@ void load_map1() {
                                           .color = WHITE};
     }
   }
+
+  for (int i = 0; i < wall_length; i++) {
+    if (i % 2 == 0) {
+      continue;
+    }
+
+    if (i < wall_length + wall_length) {
+      entitys[entity_length++] = (Entity){.pos.x = i + PLAY_AREA_START,
+                                          .pos.y = -28,
+                                          .width = 1,
+                                          .height = 1,
+                                          .type = ENTITY_HAZARD,
+                                          .color = WHITE};
+    }
+  }
 }
 
 void init_game(void) {
@@ -200,7 +257,8 @@ void init_game(void) {
   for (int i = 0; i < MAX_ENTITIES; i++) {
     entitys[i].pos = (Vector2){9999.0f, 9999.0f}; // hide uninitialized entities
   }
-  load_map1();
+  // load_map1();
+  load_map("maps/map1.txt");
 }
 
 void update_draw(void) {
@@ -232,6 +290,17 @@ void update_draw(void) {
     player.pos.y += dt * speed;
   }
 
+  if (IsKeyPressed(KEY_SPACE)) {
+    entitys[entity_length++] = (Entity){.pos.x = player.pos.x,
+                                        .pos.y = player.pos.y,
+                                        .color = RED,
+                                        .width = 0.2,
+                                        .height = 0.2,
+                                        .velocity.x = 1.0f,
+                                        .velocity.y = 1.0f,
+                                        .type = ENTITY_BULLET};
+  }
+
   if (IsKeyPressed(KEY_P)) {
     debug_on = !debug_on;
   }
@@ -245,9 +314,9 @@ void update_draw(void) {
   if (debug_on) {
     player.pos.y -= 8 * dt;
   }
-  // player.pos.y -= 5 * dt;
   // (TODO)clamp find a better way to reuse these tile values
-  player.pos.x = Clamp(player.pos.x, -5.5, 8);
+  player.pos.x = Clamp(player.pos.x, PLAY_AREA_START + player.width * 2.0f,
+                       8 + player.width);
   Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
 
   // Update camera position to follow player
@@ -293,6 +362,10 @@ void update_draw(void) {
 
       DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
                          player_rect.height, BLACK);
+    }
+
+    if (entity->type == ENTITY_BULLET) {
+      entity->pos.y -= 25.0f * dt; // adjust 10.0f to tune speed
     }
   }
 
@@ -355,7 +428,6 @@ void update_draw(void) {
 
   // --- Draw Entities ---
   for (int i = 0; i < entity_length; i++) {
-    // printf("whats happening\n");
     Entity *entity = draw_list[i];
     // cull
     if (entity->pos.y < player.pos.y - 40 ||
@@ -400,26 +472,33 @@ void update_draw(void) {
       //                origin, 0, entity->color);
     }
 
-    // if (debug_on) {
-    Rectangle rect = {entity->pos.x, entity->pos.y, entity->width,
-                      entity->height};
+    if (entity->type == ENTITY_HAZARD || entity->type == ENTITY_PLAYER) {
+      // if (debug_on) {
+      Rectangle rect = {entity->pos.x, entity->pos.y, entity->width,
+                        entity->height};
 
-    // Project corners to screen
-    Vector2 p1 = isometric_projection((Vector3){rect.x, rect.y, 0});
-    Vector2 p2 =
-        isometric_projection((Vector3){rect.x + rect.width, rect.y, 0});
-    Vector2 p3 = isometric_projection(
-        (Vector3){rect.x + rect.width, rect.y + rect.height, 0});
-    Vector2 p4 =
-        isometric_projection((Vector3){rect.x, rect.y + rect.height, 0});
+      // Project corners to screen
+      Vector2 p1 = isometric_projection((Vector3){rect.x, rect.y, 0});
+      Vector2 p2 =
+          isometric_projection((Vector3){rect.x + rect.width, rect.y, 0});
+      Vector2 p3 = isometric_projection(
+          (Vector3){rect.x + rect.width, rect.y + rect.height, 0});
+      Vector2 p4 =
+          isometric_projection((Vector3){rect.x, rect.y + rect.height, 0});
 
-    // Draw outline in world space (red for hazards, green for player)
-    Color c = (entity->type == ENTITY_HAZARD) ? RED : GREEN;
-    DrawLineV(p1, p2, c);
-    DrawLineV(p2, p3, c);
-    DrawLineV(p3, p4, c);
-    DrawLineV(p4, p1, c);
-    // }
+      // Draw outline in world space (red for hazards, green for player)
+      Color c = (entity->type == ENTITY_HAZARD) ? RED : GREEN;
+      DrawLineV(p1, p2, c);
+      DrawLineV(p2, p3, c);
+      DrawLineV(p3, p4, c);
+      DrawLineV(p4, p1, c);
+      // }
+    }
+
+    if (entity->type == ENTITY_BULLET) {
+      DrawRectangle(projected.x, projected.y, entity->width * 32,
+                    entity->height * 16, entity->color);
+    }
   }
 
   EndMode2D();
@@ -440,7 +519,6 @@ void update_draw(void) {
 }
 
 int main(void) {
-  // InitWindow(1920, 1080, "Yeehaw");
   InitWindow(VIRTUAL_WIDTH * 3, VIRTUAL_HEIGHT * 3, "Yeehaw");
   // Uncap FPS because it makes my game feel like tash
   SetTargetFPS(0);
