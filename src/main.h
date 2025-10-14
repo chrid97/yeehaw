@@ -19,7 +19,9 @@ typedef struct {
   float height;
   float width;
   Vector2 pos;
-  Vector2 velocity;
+  Vector2 vel;
+  float angle;
+  float bank_angle;
 
   int current_health;
   int max_health;

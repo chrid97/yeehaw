@@ -17,6 +17,14 @@
 #include <emscripten/emscripten.h>
 #endif
 
+static float WrapAngle(float angle) {
+  while (angle > 180.0f)
+    angle -= 360.0f;
+  while (angle < -180.0f)
+    angle += 360.0f;
+  return angle;
+}
+
 const int VIRTUAL_WIDTH = 640;
 const int VIRTUAL_HEIGHT = 360;
 const int TILE_WIDTH = 32;
@@ -109,29 +117,16 @@ void load_map(const char *path) {
     return;
   }
 
-  // printf("File opened!\n");
   char line[14];
   int y = 0;
   while (fgets(line, sizeof(line), f)) {
-    // printf("%s\n", line);
     for (int x = 0; line[x] != '\0' && line[x] != '\n'; x++) {
       char c = line[x];
       if (c == '^') {
         entity_spawn(x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
       }
-      // printf("%c", c);
     }
     y--;
-    // printf("\n");
-
-    //   for (int x = 0; line[x] != '\0' && line[x] != '\n'; x++) {
-    //     char c = line[x];
-    //     if (c == '#') {
-    //       // entity_spawn(x + PLAY_AREA_START, y - 20, ENTITY_HAZARD);
-    //     } else if (c == '^') {
-    //       // entity_spawn(x + PLAY_AREA_START, y - 20, ENTITY_HAZARD);
-    //     }
-    //   }
   }
   fclose(f);
 }
@@ -149,7 +144,8 @@ void init_game(void) {
   tile_wall = LoadTexture("assets/tileset/tile_057.png");
   tile000 = LoadTexture("assets/tileset/tile_009.png");
   // tile000 = LoadTexture("assets/tileset/tile_014.png");
-  rock_texture = LoadTexture("assets/tileset/tile_055.png");
+  // rock_texture = LoadTexture("assets/tileset/tile_055.png");
+  rock_texture = LoadTexture("assets/tileset/tile_000.png");
   border_tile = LoadTexture("assets/tileset/tile_036.png");
 
   // Load Music
@@ -166,12 +162,16 @@ void init_game(void) {
       .type = ENTITY_PLAYER,
       .pos.x = 0,
       .pos.y = 0,
+      .vel.x = 0,
+      .vel.y = 0,
       .width = 1.0f * 0.5,
       .height = 0.75f,
       .color = WHITE,
-      .damage_cooldown = 0,
+      .damage_cooldown = 0.0f,
       .current_health = 5,
       .max_health = 5,
+      .angle = 0.0f,
+      // .angle_vel = 0.0f,
   };
   camera = (Camera2D){
       .target = (Vector2){0, 0},
@@ -184,6 +184,76 @@ void init_game(void) {
   game_timer = 0;
 
   load_map("maps/map1.txt");
+}
+
+void DrawIsoCube(Vector3 center, float w, float h, float height,
+                 float tilt_angle, Color color) {
+  Vector3 base[4] = {
+      {center.x - w / 2, center.y - h / 2, center.z}, // NW
+      {center.x + w / 2, center.y - h / 2, center.z}, // NE
+      {center.x + w / 2, center.y + h / 2, center.z}, // SE
+      {center.x - w / 2, center.y + h / 2, center.z}  // SW
+  };
+
+  Vector3 top[4];
+  for (int i = 0; i < 4; i++) {
+    top[i] = base[i];
+    top[i].z += height;
+  }
+
+  // --- Apply visible tilt only to top face ---
+  float bank_strength = sinf(tilt_angle * DEG2RAD) * height * 0.6f;
+
+  // raise/lower the top corners instead of shifting base horizontally
+  for (int i = 0; i < 4; i++) {
+    if (i == 0 || i == 3) { // left side
+      top[i].z += bank_strength;
+    } else { // right side
+      top[i].z -= bank_strength;
+    }
+  }
+
+  // --- Project ---
+  Vector2 bp[4], tp[4];
+  for (int i = 0; i < 4; i++) {
+    bp[i] = isometric_projection(base[i]);
+    tp[i] = isometric_projection(top[i]);
+  }
+
+  // --- Draw edges ---
+  for (int i = 0; i < 4; i++)
+    DrawLineV(bp[i], tp[i], Fade(color, 0.6f));
+  for (int i = 0; i < 4; i++) {
+    int next = (i + 1) % 4;
+    DrawLineV(bp[i], bp[next], Fade(color, 0.4f));
+    DrawLineV(tp[i], tp[next], color);
+  }
+}
+
+void DrawPlayerDebug(Entity *player) {
+  if (!debug_on)
+    return;
+
+  float a = (player->angle - 90.0f) * DEG2RAD; // same basis as movement
+  Vector2 forward = {cosf(a), sinf(a)};
+  Vector2 right = {-sinf(a), cosf(a)};
+
+  Vector2 pos =
+      isometric_projection((Vector3){player->pos.x, player->pos.y, 0});
+  Vector2 f_end = isometric_projection((Vector3){
+      player->pos.x + forward.x * 2.0f, player->pos.y + forward.y * 2.0f, 0});
+  Vector2 r_end = isometric_projection((Vector3){
+      player->pos.x + right.x * 1.5f, player->pos.y + right.y * 1.5f, 0});
+  Vector2 v_end =
+      isometric_projection((Vector3){player->pos.x + player->vel.x * 0.25f,
+                                     player->pos.y + player->vel.y * 0.25f, 0});
+
+  DrawLineV(pos, f_end, GREEN); // forward
+  DrawLineV(pos, r_end, BLUE);  // right
+  DrawLineV(pos, v_end, RED);   // velocity
+
+  DrawText(TextFormat("Angle: %.1f°", player->angle), pos.x + 20, pos.y - 20, 8,
+           WHITE);
 }
 
 void update_draw(void) {
@@ -201,28 +271,14 @@ void update_draw(void) {
   camera.zoom = fminf(scale_x, scale_y);
 
   // --- Input ---
-  float speed = 5.0f;
-  if (IsKeyDown(KEY_A)) {
-    player.pos.x -= dt * speed;
-  }
-  if (IsKeyDown(KEY_D)) {
-    player.pos.x += dt * speed;
-  }
-  if (IsKeyDown(KEY_W)) {
-    player.pos.y -= dt * speed;
-  }
-  if (IsKeyDown(KEY_S)) {
-    player.pos.y += dt * speed;
-  }
-
   if (IsKeyPressed(KEY_SPACE)) {
     entitys[entity_length++] = (Entity){.pos.x = player.pos.x,
                                         .pos.y = player.pos.y,
                                         .color = RED,
                                         .width = 0.2,
                                         .height = 0.2,
-                                        .velocity.x = 1.0f,
-                                        .velocity.y = 1.0f,
+                                        .vel.x = 1.0f,
+                                        .vel.y = 1.0f,
                                         .type = ENTITY_BULLET};
   }
 
@@ -232,17 +288,40 @@ void update_draw(void) {
   if (IsKeyPressed(KEY_M)) {
     automove_on = !automove_on;
   }
-
   if (IsKeyPressed(KEY_R)) {
     init_game();
   }
 
+  float turn_input = 0;
+  if (IsKeyDown(KEY_A)) {
+    turn_input = -1.0f;
+  }
+  if (IsKeyDown(KEY_D)) {
+    turn_input = 1.0f;
+  }
+
+  // --- Player Movement ---
+
+  // this feels ok
+  // float drag = 3.0f;
+  // float accel = turn_input * 20.0f;
+  // player.vel.x += accel * dt;
+  // player.vel.x -= player.vel.x * drag * dt;
+  // player.pos.x += player.vel.x * dt;
+
+  float target_angle = 45.0f * turn_input;
+  float diff = target_angle - player.angle;
+  player.angle += diff * 5.0f * dt;
+  Vector2 forward = {
+      cosf((player.angle - 90.0f) * DEG2RAD), // rotate 90° so 0° faces up
+      sinf((player.angle - 90.0f) * DEG2RAD)};
+  float base_speed = 10.0f;
+  player.pos.x += forward.x * base_speed * dt;
+  player.pos.y -= base_speed * dt;
+
   // --- Update ---
   player.color = WHITE;
   game_timer += dt;
-  if (automove_on) {
-    player.pos.y -= 8 * dt;
-  }
   // (TODO)clamp find a better way to reuse these tile values
   player.pos.x = Clamp(player.pos.x, PLAY_AREA_START + player.width * 2.0f,
                        8 + player.width);
@@ -251,29 +330,6 @@ void update_draw(void) {
   // Update camera position to follow player
   camera.target = player_screen;
   camera.offset = (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
-
-  // Player-entity collision
-  // for (int i = 0; i < entity_length; i++) {
-  // Entity *entity = &entitys[i];
-  // entity->width = 1.0f;
-  // entity->height = 1.0f;
-  // if (entity->type == ENTITY_HAZARD && player.damage_cooldown <= 0) {
-  //   Vector2 player_center = {player.pos.x, player.pos.y};
-  //   float player_radius = player.width / 2.0f;
-  //
-  //   Vector2 entity_center = {entity->pos.x, entity->pos.y};
-  //   float entity_radius = entity->width / 2.0f;
-  //
-  //   float sum = entity_radius + player_radius;
-  //   float dist = Vector2Distance(player_center, entity_center);
-  //   if (dist < sum) {
-  //     player.damage_cooldown = 0.5f;
-  //     // player.current_health--;
-  //     // shake_timer = 0.5f;
-  //     PlaySound(hit_sound);
-  //   }
-  // }
-  // }
 
   // Player-entity collision
   Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
@@ -317,8 +373,8 @@ void update_draw(void) {
     draw_list[draw_count++] = &entitys[i];
   }
   draw_list[draw_count++] = &player;
-  printf("add player?: %i\n", draw_count);
   qsort(draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
+  camera.rotation = player.bank_angle * 0.25f;
 
   // --- Draw ---
   BeginDrawing();
@@ -330,7 +386,6 @@ void update_draw(void) {
   // Draw world
   // (NOTE) figure out how to start from 0 instead of a negative number
   for (int y = tile_y - 30; y < tile_y + 14; y++) {
-
     // draw from the edge of the screen to the player area (-5)
     for (int x = -21; x < -5; x++) {
       Vector3 world = {x, y, 0};
@@ -368,24 +423,12 @@ void update_draw(void) {
     Vector2 projected =
         isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
     if (entity->type == ENTITY_PLAYER) {
-      printf("player drawn\n");
-      // PLAYER ANIMATION
-      int frame_count = 2;
-      frame_timer += dt;
-      if (frame_timer >= 0.15f) { // adjust for speed
-        frame_timer = 0.0f;
-        current_frame = (current_frame + 1) % frame_count;
-      }
-
       // DRAW PLAYER
-      // Rectangle source = {0, 0, 28, 28};
-      Rectangle source = {16 * current_frame, 16, 16, 16};
-      Rectangle dest = {.x = projected.x,
-                        .y = projected.y,
-                        .width = player.width * 32,
-                        .height = player.height * 16};
-      Vector2 origin = {10, 5};
-      DrawTexturePro(player_sprite, source, dest, origin, 0, player.color);
+      Vector3 cube_center = {player.pos.x + player.width / 2.0f,
+                             player.pos.y + player.height / 2.0f, 0};
+      DrawIsoCube(cube_center, player.width, player.height, 10.5f, player.angle,
+                  WHITE);
+
     } else if (entity->type == ENTITY_HAZARD) {
       Vector2 origin = {rock_texture.width / 2.0f, rock_texture.height / 2.0f};
       Rectangle dst = {projected.x, projected.y, rock_texture.width,
@@ -418,7 +461,7 @@ void update_draw(void) {
       DrawLineV(p4, p1, c);
     }
   }
-
+  DrawPlayerDebug(&player);
   EndMode2D();
 
   // Draw player health
