@@ -21,6 +21,7 @@ typedef struct {
   Vector2 pos;
   Vector2 vel;
   float angle;
+  float angle_vel;
   float bank_angle;
 
   int current_health;

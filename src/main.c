@@ -34,7 +34,7 @@ static float frame_timer = 0.0f;
 static float shake_timer = 0.0f;
 static float game_timer = 0.0f;
 
-#define MAX_ENTITIES 1000
+#define MAX_ENTITIES 10000
 static Entity entitys[MAX_ENTITIES];
 // (NOTE) maybe I'll need a max drawables or something and its own length but I
 // think this is ok for now
@@ -55,8 +55,7 @@ static Music bg_music;
 static Sound hit_sound;
 
 // DEBUG
-static bool debug_on = true;
-static bool automove_on = true;
+static bool debug_on = false;
 
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
@@ -118,7 +117,7 @@ void load_map(const char *path) {
   }
 
   char line[14];
-  int y = 0;
+  float y = 0;
   while (fgets(line, sizeof(line), f)) {
     for (int x = 0; line[x] != '\0' && line[x] != '\n'; x++) {
       char c = line[x];
@@ -126,7 +125,7 @@ void load_map(const char *path) {
         entity_spawn(x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
       }
     }
-    y--;
+    y -= 0.5f;
   }
   fclose(f);
 }
@@ -144,8 +143,8 @@ void init_game(void) {
   tile_wall = LoadTexture("assets/tileset/tile_057.png");
   tile000 = LoadTexture("assets/tileset/tile_009.png");
   // tile000 = LoadTexture("assets/tileset/tile_014.png");
-  // rock_texture = LoadTexture("assets/tileset/tile_055.png");
-  rock_texture = LoadTexture("assets/tileset/tile_000.png");
+  rock_texture = LoadTexture("assets/tileset/tile_055.png");
+  // rock_texture = LoadTexture("assets/tileset/tile_000.png");
   border_tile = LoadTexture("assets/tileset/tile_036.png");
 
   // Load Music
@@ -164,14 +163,14 @@ void init_game(void) {
       .pos.y = 0,
       .vel.x = 0,
       .vel.y = 0,
-      .width = 1.0f * 0.5,
+      .width = 0.35,
       .height = 0.75f,
       .color = WHITE,
       .damage_cooldown = 0.0f,
-      .current_health = 5,
-      .max_health = 5,
+      .current_health = 1,
+      .max_health = 1,
       .angle = 0.0f,
-      // .angle_vel = 0.0f,
+      .angle_vel = 0.0f,
   };
   camera = (Camera2D){
       .target = (Vector2){0, 0},
@@ -285,9 +284,6 @@ void update_draw(void) {
   if (IsKeyPressed(KEY_P)) {
     debug_on = !debug_on;
   }
-  if (IsKeyPressed(KEY_M)) {
-    automove_on = !automove_on;
-  }
   if (IsKeyPressed(KEY_R)) {
     init_game();
   }
@@ -301,23 +297,38 @@ void update_draw(void) {
   }
 
   // --- Player Movement ---
-
-  // this feels ok
-  // float drag = 3.0f;
-  // float accel = turn_input * 20.0f;
-  // player.vel.x += accel * dt;
-  // player.vel.x -= player.vel.x * drag * dt;
-  // player.pos.x += player.vel.x * dt;
-
+  // --- Turning / banking ---
+  float turn_speed = 270.0f; // how fast angle responds
+  float turn_drag = 40.0f;   // how quickly rotation stops leaning
   float target_angle = 45.0f * turn_input;
-  float diff = target_angle - player.angle;
-  player.angle += diff * 5.0f * dt;
-  Vector2 forward = {
-      cosf((player.angle - 90.0f) * DEG2RAD), // rotate 90° so 0° faces up
-      sinf((player.angle - 90.0f) * DEG2RAD)};
-  float base_speed = 10.0f;
-  player.pos.x += forward.x * base_speed * dt;
-  player.pos.y -= base_speed * dt;
+  float angle_accel = (target_angle - player.angle) * turn_speed;
+  player.angle_vel += angle_accel * dt;
+  player.angle_vel -= player.angle_vel * turn_drag * dt;
+  player.angle += player.angle_vel * dt;
+
+  // --- Movement ---
+  Vector2 forward = {cosf((player.angle - 90.0f) * DEG2RAD),
+                     sinf((player.angle - 90.0f) * DEG2RAD)};
+
+  // Forward motion (always galloping)
+  float forward_speed = 10.0f;
+  player.pos.y -= forward_speed * dt;
+
+  // Lateral motion (guiding left/right)
+  float accel_strength = 200.0f; // low acceleration = gentle pull on reins
+  float drag = 25.0f;            // high drag = instant correction after input
+
+  Vector2 accel = {forward.x * accel_strength, 0}; // only lateral accel
+  player.vel.x += accel.x * dt;
+  player.vel.x -= player.vel.x * drag * dt;
+
+  // direction-flip damping
+  if ((turn_input > 0 && player.vel.x < 0) ||
+      (turn_input < 0 && player.vel.x > 0)) {
+    player.vel.x *= 0.75f; // tiny resistance when switching
+  }
+
+  player.pos.x += player.vel.x * dt;
 
   // --- Update ---
   player.color = WHITE;
@@ -341,9 +352,9 @@ void update_draw(void) {
     if (CheckCollisionRecs(player_rect, harard_rect) &&
         player.damage_cooldown <= 0) {
       PlaySound(hit_sound);
-      // player.current_health--;
+      player.current_health--;
       player.damage_cooldown = 0.5f;
-      // shake_timer = 0.5f;
+      shake_timer = 0.5f;
 
       DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
                          player_rect.height, BLACK);
@@ -427,7 +438,7 @@ void update_draw(void) {
       Vector3 cube_center = {player.pos.x + player.width / 2.0f,
                              player.pos.y + player.height / 2.0f, 0};
       DrawIsoCube(cube_center, player.width, player.height, 10.5f, player.angle,
-                  WHITE);
+                  player.color);
 
     } else if (entity->type == ENTITY_HAZARD) {
       Vector2 origin = {rock_texture.width / 2.0f, rock_texture.height / 2.0f};
