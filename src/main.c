@@ -491,7 +491,7 @@ void update_draw(void) {
 }
 
 int main(void) {
-  InitWindow(VIRTUAL_WIDTH * 3, VIRTUAL_HEIGHT * 3, "Yeehaw");
+  InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
   // Uncap FPS because it makes my game feel like tash
   SetTargetFPS(0);
   InitAudioDevice();
