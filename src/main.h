@@ -1,7 +1,9 @@
+#ifndef MAIN_H
+#define MAIN_H
+
 #include <raylib.h>
 #include <stdbool.h>
 #include <stdint.h>
-
 #define MAX_TILES 100
 
 typedef enum { GAME_OVER, PLAYING } State;
@@ -34,3 +36,8 @@ typedef struct {
 typedef struct {
   State state;
 } GameState;
+
+const int TILE_WIDTH = 32;
+const int TILE_HEIGHT = 16;
+
+#endif
