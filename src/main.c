@@ -17,14 +17,6 @@
 #include <emscripten/emscripten.h>
 #endif
 
-static float WrapAngle(float angle) {
-  while (angle > 180.0f)
-    angle -= 360.0f;
-  while (angle < -180.0f)
-    angle += 360.0f;
-  return angle;
-}
-
 const int VIRTUAL_WIDTH = 640;
 const int VIRTUAL_HEIGHT = 360;
 const int TILE_WIDTH = 32;
@@ -182,7 +174,7 @@ void init_game(void) {
   // Reset timers
   game_timer = 0;
 
-  load_map("maps/map1.txt");
+  load_map("assets/maps/map1.txt");
 }
 
 void DrawIsoCube(Vector3 center, float w, float h, float height,

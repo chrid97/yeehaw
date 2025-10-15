@@ -21,5 +21,4 @@ emcc -o build/game.html src/main.c \
   -DPLATFORM_WEB \
   -I/home/chris/repos/raylib/src \
   /home/chris/repos/raylib/src/libraylib.a \
-  --preload-file assets \
-  --preload-file maps
+  --preload-file assets
