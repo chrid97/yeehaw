@@ -1,3 +1,4 @@
+// (TODO) fix build scripts
 // (TODO) Squish player on damage
 // (TODO) Implement shadows
 #include "main.h"
@@ -17,17 +18,10 @@
 #include <emscripten/emscripten.h>
 #endif
 
+GameState game_state;
+
 const int VIRTUAL_WIDTH = 640;
 const int VIRTUAL_HEIGHT = 360;
-static float shake_timer = 0.0f;
-static float game_timer = 0.0f;
-
-#define MAX_ENTITIES 10000
-static Entity entitys[MAX_ENTITIES];
-static Entity *draw_list[MAX_ENTITIES];
-static int entity_length = 0;
-static Entity player;
-static Camera2D camera;
 Texture2D tilesheet;
 static Music bg_music;
 static Sound hit_sound;
@@ -38,15 +32,15 @@ int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
 
 Entity *entity_spawn(float x, float y, EntityType type) {
-  assert(entity_length < MAX_ENTITIES && "Entity overflow!");
-  entitys[entity_length++] = (Entity){.pos.x = x,
-                                      .pos.y = y,
-                                      .width = 1,
-                                      .height = 1,
-                                      .type = type,
-                                      .color = WHITE};
+  assert(game_state.entity_count < MAX_ENTITIES && "Entity overflow!");
+  game_state.entities[game_state.entity_count++] = (Entity){.pos.x = x,
+                                                            .pos.y = y,
+                                                            .width = 1,
+                                                            .height = 1,
+                                                            .type = type,
+                                                            .color = WHITE};
 
-  return &entitys[entity_length - 1];
+  return &game_state.entities[game_state.entity_count - 1];
 }
 
 void load_assets() {
@@ -83,37 +77,22 @@ void load_map(const char *path) {
 }
 
 void init_game(void) {
-  // Entity/map stuff
-  entity_length = 0;
+  game_state = (GameState){0};
+
+  // Render empty entities off screen
   for (int i = 0; i < MAX_ENTITIES; i++) {
-    entitys[i].pos = (Vector2){9999.0f, 9999.0f}; // hide uninitialized
-    entitys[i].type = ENTITY_NONE;
+    game_state.entities[i].pos = (Vector2){9999.0f, 9999.0f};
+    game_state.entities[i].type = ENTITY_NONE;
   }
 
-  // Init Game Objects
-  player = (Entity){.type = ENTITY_PLAYER,
-                    .pos.x = 0,
-                    .pos.y = 0,
-                    .vel.x = 0,
-                    .vel.y = 0,
-                    .width = 0.35,
-                    .height = 0.75f,
-                    .color = WHITE,
-                    .damage_cooldown = 0.0f,
-                    .current_health = 1,
-                    .max_health = 1,
-                    .angle = 0.0f,
-                    .angle_vel = 0.0f,
-                    .bank_angle = 0.0f};
-  camera = (Camera2D){
-      .target = (Vector2){0, 0},
-      .offset = (Vector2){0, 0},
-      .rotation = 0.0f,
-      .zoom = 1.0f,
-  };
+  game_state.player.type = ENTITY_PLAYER;
+  game_state.player.width = 0.35f;
+  game_state.player.height = 0.75f;
+  game_state.player.color = WHITE;
+  game_state.player.current_health = 2;
+  game_state.player.max_health = 2;
 
-  // Reset timers
-  game_timer = 0;
+  game_state.camera.zoom = 1.0f;
 
   load_map("assets/map.txt");
 }
@@ -122,7 +101,7 @@ void update_draw(void) {
   UpdateMusicStream(bg_music);
 
   // Reset on death
-  if (player.current_health <= 0) {
+  if (game_state.player.current_health <= 0) {
     init_game();
   }
 
@@ -131,14 +110,15 @@ void update_draw(void) {
 
   // --- Input ---
   if (IsKeyPressed(KEY_SPACE)) {
-    entitys[entity_length++] = (Entity){.pos.x = player.pos.x,
-                                        .pos.y = player.pos.y,
-                                        .color = RED,
-                                        .width = 0.2,
-                                        .height = 0.2,
-                                        .vel.x = 1.0f,
-                                        .vel.y = 1.0f,
-                                        .type = ENTITY_BULLET};
+    game_state.entities[game_state.entity_count++] =
+        (Entity){.pos.x = game_state.player.pos.x,
+                 .pos.y = game_state.player.pos.y,
+                 .color = RED,
+                 .width = 0.2,
+                 .height = 0.2,
+                 .vel.x = 1.0f,
+                 .vel.y = 1.0f,
+                 .type = ENTITY_BULLET};
   }
 
   if (IsKeyPressed(KEY_P)) {
@@ -164,61 +144,64 @@ void update_draw(void) {
     float turn_speed = 540.0f; // how fast angle responds
     float turn_drag = 50.0f;   // how quickly rotation stops leaning
     float target_angle = 45.0f * turn_input;
-    float angle_accel = (target_angle - player.angle) * turn_speed;
-    player.angle_vel += angle_accel * dt;
-    player.angle_vel -= player.angle_vel * turn_drag * dt;
-    player.angle += player.angle_vel * dt;
+    float angle_accel = (target_angle - game_state.player.angle) * turn_speed;
+    game_state.player.angle_vel += angle_accel * dt;
+    game_state.player.angle_vel -= game_state.player.angle_vel * turn_drag * dt;
+    game_state.player.angle += game_state.player.angle_vel * dt;
 
     // --- Movement ---
-    Vector2 forward = {cosf((player.angle - 90.0f) * DEG2RAD),
-                       sinf((player.angle - 90.0f) * DEG2RAD)};
+    Vector2 forward = {cosf((game_state.player.angle - 90.0f) * DEG2RAD),
+                       sinf((game_state.player.angle - 90.0f) * DEG2RAD)};
 
     // Forward motion (always galloping)
     float forward_speed = 10.0f;
-    player.pos.y -= forward_speed * dt;
+    game_state.player.pos.y -= forward_speed * dt;
 
     // Lateral motion (guiding left/right)
     float accel_strength = 250.0f; // low acceleration = gentle pull on reins
     float drag = 25.0f;            // high drag = instant correction after input
 
     Vector2 accel = {forward.x * accel_strength, 0}; // only lateral accel
-    player.vel.x += accel.x * dt;
-    player.vel.x -= player.vel.x * drag * dt;
+    game_state.player.vel.x += accel.x * dt;
+    game_state.player.vel.x -= game_state.player.vel.x * drag * dt;
 
     // direction-flip damping
-    if ((turn_input > 0 && player.vel.x < 0) ||
-        (turn_input < 0 && player.vel.x > 0)) {
-      player.vel.x *= 0.75f; // tiny resistance when switching
+    if ((turn_input > 0 && game_state.player.vel.x < 0) ||
+        (turn_input < 0 && game_state.player.vel.x > 0)) {
+      game_state.player.vel.x *= 0.75f; // tiny resistance when switching
     }
 
-    player.pos.x += player.vel.x * dt;
+    game_state.player.pos.x += game_state.player.vel.x * dt;
 
     // --- Update ---
-    player.color = WHITE;
-    game_timer += dt;
+    game_state.player.color = WHITE;
+    game_state.game_timer += dt;
     // (TODO)clamp find a better way to reuse these tile values
-    player.pos.x = Clamp(player.pos.x, PLAY_AREA_START + player.width * 2.0f,
-                         8 + player.width);
-    Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
+    game_state.player.pos.x =
+        Clamp(game_state.player.pos.x,
+              PLAY_AREA_START + game_state.player.width * 2.0f,
+              8 + game_state.player.width);
+    Vector2 player_screen =
+        isometric_projection((Vector3){0, game_state.player.pos.y, 0});
 
     // Update camera position to follow player
-    camera.target = player_screen;
-    camera.offset =
+    game_state.camera.target = player_screen;
+    game_state.camera.offset =
         (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
     // Player-entity collision
-    Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
-                             player.height};
-    for (int i = 0; i < entity_length; i++) {
-      Entity *entity = &entitys[i];
+    Rectangle player_rect = {game_state.player.pos.x, game_state.player.pos.y,
+                             game_state.player.width, game_state.player.height};
+    for (int i = 0; i < game_state.entity_count; i++) {
+      Entity *entity = &game_state.entities[i];
       Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
                                entity->height};
       if (CheckCollisionRecs(player_rect, harard_rect) &&
-          player.damage_cooldown <= 0) {
+          game_state.player.damage_cooldown <= 0) {
         PlaySound(hit_sound);
-        player.current_health--;
-        player.damage_cooldown = 0.5f;
-        shake_timer = 0.5f;
+        game_state.player.current_health--;
+        game_state.player.damage_cooldown = 0.5f;
+        game_state.shake_timer = 0.5f;
 
         DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
                            player_rect.height, BLACK);
@@ -229,17 +212,17 @@ void update_draw(void) {
       }
     }
 
-    if (player.damage_cooldown > 0.0f) {
-      player.damage_cooldown -= dt;
-      player.color = RED;
+    if (game_state.player.damage_cooldown > 0.0f) {
+      game_state.player.damage_cooldown -= dt;
+      game_state.player.color = RED;
     }
 
     // Screen shake
-    if (shake_timer > 0) {
-      shake_timer -= dt;
+    if (game_state.shake_timer > 0) {
+      game_state.shake_timer -= dt;
       float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
       float shake_magnitude = 10.0f;
-      camera.target.x += offset_x * shake_magnitude;
+      game_state.camera.target.x += offset_x * shake_magnitude;
     }
     steps++;
     accumulator -= FIXED_DT;
@@ -248,22 +231,22 @@ void update_draw(void) {
   // Scale game to window size
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
-  camera.zoom = fminf(scale_x, scale_y);
+  game_state.camera.zoom = fminf(scale_x, scale_y);
 
   // Update Draw List
   int draw_count = 0;
-  for (int i = 0; i < entity_length; i++) {
-    draw_list[draw_count++] = &entitys[i];
+  for (int i = 0; i < game_state.entity_count; i++) {
+    game_state.draw_list[draw_count++] = &game_state.entities[i];
   }
-  draw_list[draw_count++] = &player;
-  qsort(draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
+  game_state.draw_list[draw_count++] = &game_state.player;
+  qsort(game_state.draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
 
   // --- Draw ---
   BeginDrawing();
   ClearBackground(ORANGE);
-  BeginMode2D(camera);
+  BeginMode2D(game_state.camera);
 
-  int tile_y = floorf(player.pos.y);
+  int tile_y = floorf(game_state.player.pos.y);
   int tile_y_offset = 30;
   Rectangle unplayable_area_tile = get_tile_source_rect(36);
   // Draw world
@@ -297,10 +280,10 @@ void update_draw(void) {
 
   // --- Draw Entities ---
   for (int i = 0; i < draw_count; i++) {
-    Entity *entity = draw_list[i];
+    Entity *entity = game_state.draw_list[i];
     // cull
-    if (entity->pos.y < player.pos.y - 40 ||
-        entity->pos.y > player.pos.y + 20) {
+    if (entity->pos.y < game_state.player.pos.y - 40 ||
+        entity->pos.y > game_state.player.pos.y + 20) {
       continue;
     }
 
@@ -308,10 +291,12 @@ void update_draw(void) {
         isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
     if (entity->type == ENTITY_PLAYER) {
       // DRAW PLAYER
-      Vector3 cube_center = {player.pos.x + player.width / 2.0f,
-                             player.pos.y + player.height / 2.0f, 0};
-      DrawIsoCube(cube_center, player.width, player.height, 10.5f, player.angle,
-                  player.color);
+      Vector3 cube_center = {
+          game_state.player.pos.x + game_state.player.width / 2.0f,
+          game_state.player.pos.y + game_state.player.height / 2.0f, 0};
+      DrawIsoCube(cube_center, game_state.player.width,
+                  game_state.player.height, 10.5f, game_state.player.angle,
+                  game_state.player.color);
 
     } else if (entity->type == ENTITY_HAZARD) {
       Rectangle source = get_tile_source_rect(55);
@@ -346,18 +331,19 @@ void update_draw(void) {
   }
 
   if (debug_on) {
-    DrawPlayerDebug(&player);
+    DrawPlayerDebug(&game_state.player);
   }
   EndMode2D();
 
   // Draw player health
-  for (int i = 0; i < player.max_health; i++) {
-    DrawRectangle((i * 35), 30, 25, 25, i < player.current_health ? RED : GRAY);
+  for (int i = 0; i < game_state.player.max_health; i++) {
+    DrawRectangle((i * 35), 30, 25, 25,
+                  i < game_state.player.current_health ? RED : GRAY);
   }
 
   float scale = fminf(scale_x, scale_y);
   int font_size = (int)(40 * scale);
-  const char *timer_text = TextFormat("%.1f", game_timer);
+  const char *timer_text = TextFormat("%.1f", game_state.game_timer);
   int text_width = MeasureText(timer_text, font_size);
   DrawText(timer_text, (GetScreenWidth() - text_width) / 2, 0, font_size,
            WHITE);
