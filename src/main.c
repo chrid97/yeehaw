@@ -138,6 +138,7 @@ void init_game(void) {
     entitys[i].type = ENTITY_NONE;
   }
 
+  UpdateMusicStream(bg_music);
   // Load Textures
   player_sprite = LoadTexture("assets/horse.png");
   tile_wall = LoadTexture("assets/tileset/tile_057.png");
@@ -261,7 +262,6 @@ void update_draw(void) {
     init_game();
   }
 
-  UpdateMusicStream(bg_music);
   float dt = GetFrameTime();
 
   // Scale game to window size
@@ -491,9 +491,13 @@ void update_draw(void) {
 }
 
 int main(void) {
-  InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
+  InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
   // Uncap FPS because it makes my game feel like tash
+#ifdef PLATFORM_WEB
+  SetTargetFPS(60);
+#else
   SetTargetFPS(0);
+#endif
   InitAudioDevice();
   srand((unsigned int)time(NULL));
   init_game();
