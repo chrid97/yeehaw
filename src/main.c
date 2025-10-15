@@ -33,12 +33,7 @@ static Entity player;
 static Camera2D camera;
 
 // Textures
-static Texture2D tile000;
-static Texture2D player_sprite;
-static Texture2D tile_wall;
-static Texture2D rock_texture;
-
-static Texture2D border_tile;
+Texture2D tilesheet;
 
 static Music bg_music;
 static Sound hit_sound;
@@ -94,13 +89,7 @@ void init_game(void) {
   }
 
   // Load Textures
-  player_sprite = LoadTexture("assets/horse.png");
-  tile_wall = LoadTexture("assets/tileset/tile_057.png");
-  tile000 = LoadTexture("assets/tileset/tile_009.png");
-  // tile000 = LoadTexture("assets/tileset/tile_014.png");
-  rock_texture = LoadTexture("assets/tileset/tile_055.png");
-  // rock_texture = LoadTexture("assets/tileset/tile_000.png");
-  border_tile = LoadTexture("assets/tileset/tile_036.png");
+  tilesheet = LoadTexture("assets/tiles.png");
 
   // Load Music
   bg_music = LoadMusicStream("assets/spagetti-western.ogg");
@@ -136,7 +125,7 @@ void init_game(void) {
   // Reset timers
   game_timer = 0;
 
-  load_map("assets/maps/map1.txt");
+  load_map("assets/map.txt");
 }
 
 void update_draw(void) {
@@ -286,6 +275,7 @@ void update_draw(void) {
 
   int tile_y = floorf(player.pos.y);
   int tile_y_offset = 30;
+  Rectangle unplayable_area_tile = get_tile_source_rect(36);
   // Draw world
   // (NOTE) figure out how to start from 0 instead of a negative number
   for (int y = tile_y - 30; y < tile_y + 14; y++) {
@@ -293,7 +283,7 @@ void update_draw(void) {
     for (int x = -21; x < -5; x++) {
       Vector3 world = {x, y, 0};
       Vector2 screen = isometric_projection(world);
-      DrawTextureV(border_tile, screen, WHITE);
+      DrawTextureRec(tilesheet, unplayable_area_tile, screen, WHITE);
     }
 
     // Draw play area
@@ -303,14 +293,15 @@ void update_draw(void) {
       // not sure if this shit smooths teh game either, idts
       screen.x = floorf(screen.x);
       screen.y = floorf(screen.y);
-      DrawTextureV(tile000, screen, WHITE);
+      Rectangle floor_tile = get_tile_source_rect(9);
+      DrawTextureRec(tilesheet, floor_tile, screen, WHITE);
     }
 
     // draw from the end of the play are to the right half of the screen
     for (int x = 8; x < 22; x++) {
       Vector3 world = {x, y, 0};
       Vector2 screen = isometric_projection(world);
-      DrawTextureV(border_tile, screen, WHITE);
+      DrawTextureRec(tilesheet, unplayable_area_tile, screen, WHITE);
     }
   }
 
@@ -333,11 +324,10 @@ void update_draw(void) {
                   player.color);
 
     } else if (entity->type == ENTITY_HAZARD) {
-      Vector2 origin = {rock_texture.width / 2.0f, rock_texture.height / 2.0f};
-      Rectangle dst = {projected.x, projected.y, rock_texture.width,
-                       rock_texture.height};
-      DrawTexturePro(rock_texture, (Rectangle){0, 0, 32, 32}, dst, origin, 0,
-                     entity->color);
+      Rectangle source = get_tile_source_rect(55);
+      Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
+      Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
+      DrawTexturePro(tilesheet, source, dst, origin, 0, entity->color);
     } else if (entity->type == ENTITY_BULLET) {
       DrawRectangle(projected.x, projected.y, entity->width * 32,
                     entity->height * 16, entity->color);

@@ -3,6 +3,8 @@
 #include <math.h>
 #include <stdlib.h>
 
+extern Texture2D tilesheet; // exists in main.c
+
 int random_between(int min, int max) {
   if (max <= min) {
     return min;
@@ -105,4 +107,11 @@ void DrawPlayerDebug(Entity *player) {
 
   DrawText(TextFormat("Angle: %.1f°", player->angle), pos.x + 20, pos.y - 20, 8,
            WHITE);
+}
+
+Rectangle get_tile_source_rect(int tile_index) {
+  int tiles_per_row = tilesheet.width / TILE_SIZE;
+  int tx = tile_index % tiles_per_row;
+  int ty = tile_index / tiles_per_row;
+  return (Rectangle){tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE, TILE_SIZE};
 }

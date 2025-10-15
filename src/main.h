@@ -4,7 +4,7 @@
 #include <raylib.h>
 #include <stdbool.h>
 #include <stdint.h>
-#define MAX_TILES 100
+#define TILE_SIZE 32
 
 typedef enum { GAME_OVER, PLAYING } State;
 
