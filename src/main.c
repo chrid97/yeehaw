@@ -138,7 +138,6 @@ void init_game(void) {
     entitys[i].type = ENTITY_NONE;
   }
 
-  UpdateMusicStream(bg_music);
   // Load Textures
   player_sprite = LoadTexture("assets/horse.png");
   tile_wall = LoadTexture("assets/tileset/tile_057.png");
@@ -257,13 +256,16 @@ void DrawPlayerDebug(Entity *player) {
 }
 
 void update_draw(void) {
+  UpdateMusicStream(bg_music);
+
   // Reset on death
   if (player.current_health <= 0) {
     init_game();
   }
 
   float dt = GetFrameTime();
-
+  if (dt > 0.05f)
+    dt = 0.05f;
   // Scale game to window size
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
@@ -289,10 +291,10 @@ void update_draw(void) {
   }
 
   float turn_input = 0;
-  if (IsKeyDown(KEY_A)) {
+  if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
     turn_input = -1.0f;
   }
-  if (IsKeyDown(KEY_D)) {
+  if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
     turn_input = 1.0f;
   }
 
@@ -345,7 +347,7 @@ void update_draw(void) {
   // Player-entity collision
   Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
                            player.height};
-  for (int i = 0; i < MAX_ENTITIES; i++) {
+  for (int i = 0; i < entity_length; i++) {
     Entity *entity = &entitys[i];
     Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
                              entity->height};
@@ -491,7 +493,7 @@ void update_draw(void) {
 }
 
 int main(void) {
-  InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
+  InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
   // Uncap FPS because it makes my game feel like tash
 #ifdef PLATFORM_WEB
   SetTargetFPS(60);
