@@ -5,10 +5,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define MAX_ENTITIES 10000
 #define TILE_SIZE 32
 #define TILE_WIDTH 32
 #define TILE_HEIGHT 16
+
+#define VIRTUAL_WIDTH 640
+#define VIRTUAL_HEIGHT 360
+#define FIXED_DT (1.0f / 120.0f)
+
+#define MAX_ENTITIES 10000
 
 typedef enum { GAME_OVER, PLAYING } State;
 

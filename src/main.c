@@ -19,14 +19,10 @@
 #endif
 
 GameState game_state;
-
-const int VIRTUAL_WIDTH = 640;
-const int VIRTUAL_HEIGHT = 360;
 Texture2D tilesheet;
 static Music bg_music;
 static Sound hit_sound;
 static bool debug_on = false;
-static const float FIXED_DT = 1.0f / 120.0f;
 static double accumulator = 0.0;
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
@@ -95,6 +91,129 @@ void init_game(void) {
   game_state.camera.zoom = 1.0f;
 
   load_map("assets/map.txt");
+}
+
+void render(GameState *game_state) {
+  // Update Draw List
+  int draw_count = 0;
+  for (int i = 0; i < game_state->entity_count; i++) {
+    game_state->draw_list[draw_count++] = &game_state->entities[i];
+  }
+
+  game_state->draw_list[draw_count++] = &game_state->player;
+  qsort(game_state->draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
+  BeginDrawing();
+  ClearBackground(ORANGE);
+  BeginMode2D(game_state->camera);
+
+  int tile_y = floorf(game_state->player.pos.y);
+  int tile_y_offset = 30;
+  Rectangle unplayable_area_tile = get_tile_source_rect(36);
+  // Draw world
+  // (NOTE) figure out how to start from 0 instead of a negative number
+  for (int y = tile_y - 30; y < tile_y + 14; y++) {
+    // draw from the edge of the screen to the player area (-5)
+    for (int x = -21; x < -5; x++) {
+      Vector3 world = {x, y, 0};
+      Vector2 screen = isometric_projection(world);
+      DrawTextureRec(tilesheet, unplayable_area_tile, screen, WHITE);
+    }
+
+    // Draw play area
+    for (int x = PLAY_AREA_START; x < PLAY_AREA_END; x++) {
+      Vector3 world = {x, y, 0};
+      Vector2 screen = isometric_projection(world);
+      // not sure if this shit smooths teh game either, idts
+      screen.x = floorf(screen.x);
+      screen.y = floorf(screen.y);
+      Rectangle floor_tile = get_tile_source_rect(9);
+      DrawTextureRec(tilesheet, floor_tile, screen, WHITE);
+    }
+
+    // draw from the end of the play are to the right half of the screen
+    for (int x = 8; x < 22; x++) {
+      Vector3 world = {x, y, 0};
+      Vector2 screen = isometric_projection(world);
+      DrawTextureRec(tilesheet, unplayable_area_tile, screen, WHITE);
+    }
+  }
+
+  // --- Draw Entities ---
+  for (int i = 0; i < draw_count; i++) {
+    Entity *entity = game_state->draw_list[i];
+    // cull
+    if (entity->pos.y < game_state->player.pos.y - 40 ||
+        entity->pos.y > game_state->player.pos.y + 20) {
+      continue;
+    }
+
+    Vector2 projected =
+        isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
+    if (entity->type == ENTITY_PLAYER) {
+      // DRAW PLAYER
+      Vector3 cube_center = {
+          game_state->player.pos.x + game_state->player.width / 2.0f,
+          game_state->player.pos.y + game_state->player.height / 2.0f, 0};
+      DrawIsoCube(cube_center, game_state->player.width,
+                  game_state->player.height, 10.5f, game_state->player.angle,
+                  game_state->player.color);
+
+    } else if (entity->type == ENTITY_HAZARD) {
+      Rectangle source = get_tile_source_rect(55);
+      Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
+      Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
+      DrawTexturePro(tilesheet, source, dst, origin, 0, entity->color);
+    } else if (entity->type == ENTITY_BULLET) {
+      DrawRectangle(projected.x, projected.y, entity->width * 32,
+                    entity->height * 16, entity->color);
+    }
+
+    if (debug_on && entity->type != ENTITY_BULLET) {
+      Rectangle rect = {entity->pos.x, entity->pos.y, entity->width,
+                        entity->height};
+
+      // Project corners to screen
+      Vector2 p1 = isometric_projection((Vector3){rect.x, rect.y, 0});
+      Vector2 p2 =
+          isometric_projection((Vector3){rect.x + rect.width, rect.y, 0});
+      Vector2 p3 = isometric_projection(
+          (Vector3){rect.x + rect.width, rect.y + rect.height, 0});
+      Vector2 p4 =
+          isometric_projection((Vector3){rect.x, rect.y + rect.height, 0});
+
+      // Draw outline in world space (red for hazards, green for player)
+      Color c = (entity->type == ENTITY_HAZARD) ? RED : GREEN;
+      DrawLineV(p1, p2, c);
+      DrawLineV(p2, p3, c);
+      DrawLineV(p3, p4, c);
+      DrawLineV(p4, p1, c);
+    }
+  }
+
+  if (debug_on) {
+    DrawPlayerDebug(&game_state->player);
+  }
+  EndMode2D();
+
+  // Draw player health
+  for (int i = 0; i < game_state->player.max_health; i++) {
+    DrawRectangle((i * 35), 30, 25, 25,
+                  i < game_state->player.current_health ? RED : GRAY);
+  }
+
+  // Scale game to window size
+  float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
+  float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
+  game_state->camera.zoom = fminf(scale_x, scale_y);
+
+  float scale = fminf(scale_x, scale_y);
+  int font_size = (int)(40 * scale);
+  const char *timer_text = TextFormat("%.1f", game_state->game_timer);
+  int text_width = MeasureText(timer_text, font_size);
+  DrawText(timer_text, (GetScreenWidth() - text_width) / 2, 0, font_size,
+           WHITE);
+  DrawFPS(0, 0);
+  EndDrawing();
 }
 
 void update_draw(void) {
@@ -228,127 +347,7 @@ void update_draw(void) {
     accumulator -= FIXED_DT;
   }
 
-  // Scale game to window size
-  float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
-  float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
-  game_state.camera.zoom = fminf(scale_x, scale_y);
-
-  // Update Draw List
-  int draw_count = 0;
-  for (int i = 0; i < game_state.entity_count; i++) {
-    game_state.draw_list[draw_count++] = &game_state.entities[i];
-  }
-  game_state.draw_list[draw_count++] = &game_state.player;
-  qsort(game_state.draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
-
-  // --- Draw ---
-  BeginDrawing();
-  ClearBackground(ORANGE);
-  BeginMode2D(game_state.camera);
-
-  int tile_y = floorf(game_state.player.pos.y);
-  int tile_y_offset = 30;
-  Rectangle unplayable_area_tile = get_tile_source_rect(36);
-  // Draw world
-  // (NOTE) figure out how to start from 0 instead of a negative number
-  for (int y = tile_y - 30; y < tile_y + 14; y++) {
-    // draw from the edge of the screen to the player area (-5)
-    for (int x = -21; x < -5; x++) {
-      Vector3 world = {x, y, 0};
-      Vector2 screen = isometric_projection(world);
-      DrawTextureRec(tilesheet, unplayable_area_tile, screen, WHITE);
-    }
-
-    // Draw play area
-    for (int x = PLAY_AREA_START; x < PLAY_AREA_END; x++) {
-      Vector3 world = {x, y, 0};
-      Vector2 screen = isometric_projection(world);
-      // not sure if this shit smooths teh game either, idts
-      screen.x = floorf(screen.x);
-      screen.y = floorf(screen.y);
-      Rectangle floor_tile = get_tile_source_rect(9);
-      DrawTextureRec(tilesheet, floor_tile, screen, WHITE);
-    }
-
-    // draw from the end of the play are to the right half of the screen
-    for (int x = 8; x < 22; x++) {
-      Vector3 world = {x, y, 0};
-      Vector2 screen = isometric_projection(world);
-      DrawTextureRec(tilesheet, unplayable_area_tile, screen, WHITE);
-    }
-  }
-
-  // --- Draw Entities ---
-  for (int i = 0; i < draw_count; i++) {
-    Entity *entity = game_state.draw_list[i];
-    // cull
-    if (entity->pos.y < game_state.player.pos.y - 40 ||
-        entity->pos.y > game_state.player.pos.y + 20) {
-      continue;
-    }
-
-    Vector2 projected =
-        isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
-    if (entity->type == ENTITY_PLAYER) {
-      // DRAW PLAYER
-      Vector3 cube_center = {
-          game_state.player.pos.x + game_state.player.width / 2.0f,
-          game_state.player.pos.y + game_state.player.height / 2.0f, 0};
-      DrawIsoCube(cube_center, game_state.player.width,
-                  game_state.player.height, 10.5f, game_state.player.angle,
-                  game_state.player.color);
-
-    } else if (entity->type == ENTITY_HAZARD) {
-      Rectangle source = get_tile_source_rect(55);
-      Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
-      Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
-      DrawTexturePro(tilesheet, source, dst, origin, 0, entity->color);
-    } else if (entity->type == ENTITY_BULLET) {
-      DrawRectangle(projected.x, projected.y, entity->width * 32,
-                    entity->height * 16, entity->color);
-    }
-
-    if (debug_on && entity->type != ENTITY_BULLET) {
-      Rectangle rect = {entity->pos.x, entity->pos.y, entity->width,
-                        entity->height};
-
-      // Project corners to screen
-      Vector2 p1 = isometric_projection((Vector3){rect.x, rect.y, 0});
-      Vector2 p2 =
-          isometric_projection((Vector3){rect.x + rect.width, rect.y, 0});
-      Vector2 p3 = isometric_projection(
-          (Vector3){rect.x + rect.width, rect.y + rect.height, 0});
-      Vector2 p4 =
-          isometric_projection((Vector3){rect.x, rect.y + rect.height, 0});
-
-      // Draw outline in world space (red for hazards, green for player)
-      Color c = (entity->type == ENTITY_HAZARD) ? RED : GREEN;
-      DrawLineV(p1, p2, c);
-      DrawLineV(p2, p3, c);
-      DrawLineV(p3, p4, c);
-      DrawLineV(p4, p1, c);
-    }
-  }
-
-  if (debug_on) {
-    DrawPlayerDebug(&game_state.player);
-  }
-  EndMode2D();
-
-  // Draw player health
-  for (int i = 0; i < game_state.player.max_health; i++) {
-    DrawRectangle((i * 35), 30, 25, 25,
-                  i < game_state.player.current_health ? RED : GRAY);
-  }
-
-  float scale = fminf(scale_x, scale_y);
-  int font_size = (int)(40 * scale);
-  const char *timer_text = TextFormat("%.1f", game_state.game_timer);
-  int text_width = MeasureText(timer_text, font_size);
-  DrawText(timer_text, (GetScreenWidth() - text_width) / 2, 0, font_size,
-           WHITE);
-  DrawFPS(0, 0);
-  EndDrawing();
+  render(&game_state);
 }
 
 int main(void) {
