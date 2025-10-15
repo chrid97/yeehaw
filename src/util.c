@@ -18,7 +18,7 @@ Vector2 isometric_projection(Vector3 pos) {
 }
 
 // Sort pointers in draw_list by on-screen depth
-int cmp_draw_ptrs(const void *A, const void *B) {
+int compare_entities_for_draw_order(const void *A, const void *B) {
   const Entity *a = *(Entity *const *)A; // note the extra *
   const Entity *b = *(Entity *const *)B;
 
@@ -42,8 +42,8 @@ int cmp_draw_ptrs(const void *A, const void *B) {
   return 0;
 }
 
-void DrawIsoCube(Vector3 center, float w, float h, float height,
-                 float tilt_angle, Color color) {
+void draw_iso_cube(Vector3 center, float w, float h, float height,
+                   float tilt_angle, Color color) {
   Vector3 base[4] = {
       {center.x - w / 2, center.y - h / 2, center.z}, // NW
       {center.x + w / 2, center.y - h / 2, center.z}, // NE

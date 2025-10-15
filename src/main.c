@@ -7,8 +7,6 @@
 #include "util.c"
 #include <assert.h>
 #include <math.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -101,7 +99,8 @@ void render(GameState *game_state) {
   }
 
   game_state->draw_list[draw_count++] = &game_state->player;
-  qsort(game_state->draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
+  qsort(game_state->draw_list, draw_count, sizeof(Entity *),
+        compare_entities_for_draw_order);
   BeginDrawing();
   ClearBackground(ORANGE);
   BeginMode2D(game_state->camera);
@@ -154,9 +153,9 @@ void render(GameState *game_state) {
       Vector3 cube_center = {
           game_state->player.pos.x + game_state->player.width / 2.0f,
           game_state->player.pos.y + game_state->player.height / 2.0f, 0};
-      DrawIsoCube(cube_center, game_state->player.width,
-                  game_state->player.height, 10.5f, game_state->player.angle,
-                  game_state->player.color);
+      draw_iso_cube(cube_center, game_state->player.width,
+                    game_state->player.height, 10.5f, game_state->player.angle,
+                    game_state->player.color);
 
     } else if (entity->type == ENTITY_HAZARD) {
       Rectangle source = get_tile_source_rect(55);
@@ -216,7 +215,7 @@ void render(GameState *game_state) {
   EndDrawing();
 }
 
-void update_draw(void) {
+void game_update_and_render(void) {
   UpdateMusicStream(bg_music);
 
   // Reset on death
@@ -363,7 +362,7 @@ int main(void) {
   emscripten_set_main_loop(update_draw, 0, 1);
 #else
   while (!WindowShouldClose()) {
-    update_draw();
+    game_update_and_render();
   }
 #endif
 
