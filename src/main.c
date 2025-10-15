@@ -29,8 +29,6 @@ const int VIRTUAL_WIDTH = 640;
 const int VIRTUAL_HEIGHT = 360;
 const int TILE_WIDTH = 32;
 const int TILE_HEIGHT = 16;
-static int current_frame = 0;
-static float frame_timer = 0.0f;
 static float shake_timer = 0.0f;
 static float game_timer = 0.0f;
 
@@ -56,6 +54,9 @@ static Sound hit_sound;
 
 // DEBUG
 static bool debug_on = false;
+// Fixed timestep globals
+static const float FIXED_DT = 1.0f / 120.0f; // 120 Hz physics
+static double accumulator = 0.0;
 
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
@@ -106,7 +107,7 @@ Entity *entity_spawn(float x, float y, EntityType type) {
                                       .type = type,
                                       .color = WHITE};
 
-  return &entitys[entity_length];
+  return &entitys[entity_length - 1];
 }
 
 void load_map(const char *path) {
@@ -157,21 +158,20 @@ void init_game(void) {
   SetSoundVolume(hit_sound, 0.5f);
 
   // Init Game Objects
-  player = (Entity){
-      .type = ENTITY_PLAYER,
-      .pos.x = 0,
-      .pos.y = 0,
-      .vel.x = 0,
-      .vel.y = 0,
-      .width = 0.35,
-      .height = 0.75f,
-      .color = WHITE,
-      .damage_cooldown = 0.0f,
-      .current_health = 1,
-      .max_health = 1,
-      .angle = 0.0f,
-      .angle_vel = 0.0f,
-  };
+  player = (Entity){.type = ENTITY_PLAYER,
+                    .pos.x = 0,
+                    .pos.y = 0,
+                    .vel.x = 0,
+                    .vel.y = 0,
+                    .width = 0.35,
+                    .height = 0.75f,
+                    .color = WHITE,
+                    .damage_cooldown = 0.0f,
+                    .current_health = 1,
+                    .max_health = 1,
+                    .angle = 0.0f,
+                    .angle_vel = 0.0f,
+                    .bank_angle = 0.0f};
   camera = (Camera2D){
       .target = (Vector2){0, 0},
       .offset = (Vector2){0, 0},
@@ -263,13 +263,8 @@ void update_draw(void) {
     init_game();
   }
 
-  float dt = GetFrameTime();
-  if (dt > 0.05f)
-    dt = 0.05f;
-  // Scale game to window size
-  float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
-  float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
-  camera.zoom = fminf(scale_x, scale_y);
+  float frame_dt = GetFrameTime();
+  accumulator += frame_dt;
 
   // --- Input ---
   if (IsKeyPressed(KEY_SPACE)) {
@@ -289,96 +284,108 @@ void update_draw(void) {
   if (IsKeyPressed(KEY_R)) {
     init_game();
   }
-
-  float turn_input = 0;
-  if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
-    turn_input = -1.0f;
-  }
-  if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
-    turn_input = 1.0f;
-  }
-
-  // --- Player Movement ---
-  // --- Turning / banking ---
-  float turn_speed = 270.0f; // how fast angle responds
-  float turn_drag = 40.0f;   // how quickly rotation stops leaning
-  float target_angle = 45.0f * turn_input;
-  float angle_accel = (target_angle - player.angle) * turn_speed;
-  player.angle_vel += angle_accel * dt;
-  player.angle_vel -= player.angle_vel * turn_drag * dt;
-  player.angle += player.angle_vel * dt;
-
-  // --- Movement ---
-  Vector2 forward = {cosf((player.angle - 90.0f) * DEG2RAD),
-                     sinf((player.angle - 90.0f) * DEG2RAD)};
-
-  // Forward motion (always galloping)
-  float forward_speed = 10.0f;
-  player.pos.y -= forward_speed * dt;
-
-  // Lateral motion (guiding left/right)
-  float accel_strength = 200.0f; // low acceleration = gentle pull on reins
-  float drag = 25.0f;            // high drag = instant correction after input
-
-  Vector2 accel = {forward.x * accel_strength, 0}; // only lateral accel
-  player.vel.x += accel.x * dt;
-  player.vel.x -= player.vel.x * drag * dt;
-
-  // direction-flip damping
-  if ((turn_input > 0 && player.vel.x < 0) ||
-      (turn_input < 0 && player.vel.x > 0)) {
-    player.vel.x *= 0.75f; // tiny resistance when switching
-  }
-
-  player.pos.x += player.vel.x * dt;
-
-  // --- Update ---
-  player.color = WHITE;
-  game_timer += dt;
-  // (TODO)clamp find a better way to reuse these tile values
-  player.pos.x = Clamp(player.pos.x, PLAY_AREA_START + player.width * 2.0f,
-                       8 + player.width);
-  Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
-
-  // Update camera position to follow player
-  camera.target = player_screen;
-  camera.offset = (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
-
-  // Player-entity collision
-  Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
-                           player.height};
-  for (int i = 0; i < entity_length; i++) {
-    Entity *entity = &entitys[i];
-    Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
-                             entity->height};
-    if (CheckCollisionRecs(player_rect, harard_rect) &&
-        player.damage_cooldown <= 0) {
-      PlaySound(hit_sound);
-      player.current_health--;
-      player.damage_cooldown = 0.5f;
-      shake_timer = 0.5f;
-
-      DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
-                         player_rect.height, BLACK);
+  int steps = 0;
+  const int MAX_STEPS = 8; // safety cap
+  while (accumulator >= FIXED_DT && steps < MAX_STEPS) {
+    float dt = FIXED_DT;
+    float turn_input = 0;
+    if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
+      turn_input = -1.0f;
+    }
+    if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
+      turn_input = 1.0f;
     }
 
-    if (entity->type == ENTITY_BULLET) {
-      entity->pos.y -= 25.0f * dt; // adjust 10.0f to tune speed
+    // --- Player Movement ---
+    // --- Turning / banking ---
+    float turn_speed = 540.0f; // how fast angle responds
+    float turn_drag = 50.0f;   // how quickly rotation stops leaning
+    float target_angle = 45.0f * turn_input;
+    float angle_accel = (target_angle - player.angle) * turn_speed;
+    player.angle_vel += angle_accel * dt;
+    player.angle_vel -= player.angle_vel * turn_drag * dt;
+    player.angle += player.angle_vel * dt;
+
+    // --- Movement ---
+    Vector2 forward = {cosf((player.angle - 90.0f) * DEG2RAD),
+                       sinf((player.angle - 90.0f) * DEG2RAD)};
+
+    // Forward motion (always galloping)
+    float forward_speed = 10.0f;
+    player.pos.y -= forward_speed * dt;
+
+    // Lateral motion (guiding left/right)
+    float accel_strength = 250.0f; // low acceleration = gentle pull on reins
+    float drag = 25.0f;            // high drag = instant correction after input
+
+    Vector2 accel = {forward.x * accel_strength, 0}; // only lateral accel
+    player.vel.x += accel.x * dt;
+    player.vel.x -= player.vel.x * drag * dt;
+
+    // direction-flip damping
+    if ((turn_input > 0 && player.vel.x < 0) ||
+        (turn_input < 0 && player.vel.x > 0)) {
+      player.vel.x *= 0.75f; // tiny resistance when switching
     }
+
+    player.pos.x += player.vel.x * dt;
+
+    // --- Update ---
+    player.color = WHITE;
+    game_timer += dt;
+    // (TODO)clamp find a better way to reuse these tile values
+    player.pos.x = Clamp(player.pos.x, PLAY_AREA_START + player.width * 2.0f,
+                         8 + player.width);
+    Vector2 player_screen = isometric_projection((Vector3){0, player.pos.y, 0});
+
+    // Update camera position to follow player
+    camera.target = player_screen;
+    camera.offset =
+        (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
+
+    // Player-entity collision
+    Rectangle player_rect = {player.pos.x, player.pos.y, player.width,
+                             player.height};
+    for (int i = 0; i < entity_length; i++) {
+      Entity *entity = &entitys[i];
+      Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
+                               entity->height};
+      if (CheckCollisionRecs(player_rect, harard_rect) &&
+          player.damage_cooldown <= 0) {
+        PlaySound(hit_sound);
+        player.current_health--;
+        player.damage_cooldown = 0.5f;
+        shake_timer = 0.5f;
+
+        DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
+                           player_rect.height, BLACK);
+      }
+
+      if (entity->type == ENTITY_BULLET) {
+        entity->pos.y -= 25.0f * dt; // adjust 10.0f to tune speed
+      }
+    }
+
+    if (player.damage_cooldown > 0.0f) {
+      player.damage_cooldown -= dt;
+      player.color = RED;
+    }
+
+    // Screen shake
+    if (shake_timer > 0) {
+      shake_timer -= dt;
+      float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+      float shake_magnitude = 10.0f;
+      camera.target.x += offset_x * shake_magnitude;
+    }
+    steps++;
+    accumulator -= FIXED_DT;
   }
 
-  if (player.damage_cooldown > 0.0f) {
-    player.damage_cooldown -= dt;
-    player.color = RED;
-  }
-
-  // Screen shake
-  if (shake_timer > 0) {
-    shake_timer -= dt;
-    float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
-    float shake_magnitude = 10.0f;
-    camera.target.x += offset_x * shake_magnitude;
-  }
+  // Scale game to window size
+  float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
+  float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
+  camera.zoom = fminf(scale_x, scale_y);
 
   // Update Draw List
   int draw_count = 0;
@@ -387,7 +394,6 @@ void update_draw(void) {
   }
   draw_list[draw_count++] = &player;
   qsort(draw_list, draw_count, sizeof(Entity *), cmp_draw_ptrs);
-  camera.rotation = player.bank_angle * 0.25f;
 
   // --- Draw ---
   BeginDrawing();
@@ -495,11 +501,7 @@ void update_draw(void) {
 int main(void) {
   InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
   // Uncap FPS because it makes my game feel like tash
-#ifdef PLATFORM_WEB
-  SetTargetFPS(60);
-#else
   SetTargetFPS(0);
-#endif
   InitAudioDevice();
   srand((unsigned int)time(NULL));
   init_game();
