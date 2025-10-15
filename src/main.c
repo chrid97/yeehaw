@@ -1,5 +1,4 @@
 // (TODO) Squish player on damage
-// (TODO) Read from the spritesheet propely
 // (TODO) Implement shadows
 #include "main.h"
 #include "raylib.h"
@@ -25,25 +24,16 @@ static float game_timer = 0.0f;
 
 #define MAX_ENTITIES 10000
 static Entity entitys[MAX_ENTITIES];
-// (NOTE) maybe I'll need a max drawables or something and its own length but I
-// think this is ok for now
 static Entity *draw_list[MAX_ENTITIES];
 static int entity_length = 0;
 static Entity player;
 static Camera2D camera;
-
-// Textures
 Texture2D tilesheet;
-
 static Music bg_music;
 static Sound hit_sound;
-
-// DEBUG
 static bool debug_on = false;
-// Fixed timestep globals
-static const float FIXED_DT = 1.0f / 120.0f; // 120 Hz physics
+static const float FIXED_DT = 1.0f / 120.0f;
 static double accumulator = 0.0;
-
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
 
@@ -57,6 +47,18 @@ Entity *entity_spawn(float x, float y, EntityType type) {
                                       .color = WHITE};
 
   return &entitys[entity_length - 1];
+}
+
+void load_assets() {
+  // Load textures
+  tilesheet = LoadTexture("assets/tiles.png");
+  // Load Music
+  bg_music = LoadMusicStream("assets/spagetti-western.ogg");
+  SetMusicVolume(bg_music, 0.05f);
+  PlayMusicStream(bg_music);
+  // Load SFX
+  hit_sound = LoadSound("assets/sfx_sounds_impact12.wav");
+  SetSoundVolume(hit_sound, 0.5f);
 }
 
 void load_map(const char *path) {
@@ -87,18 +89,6 @@ void init_game(void) {
     entitys[i].pos = (Vector2){9999.0f, 9999.0f}; // hide uninitialized
     entitys[i].type = ENTITY_NONE;
   }
-
-  // Load Textures
-  tilesheet = LoadTexture("assets/tiles.png");
-
-  // Load Music
-  bg_music = LoadMusicStream("assets/spagetti-western.ogg");
-  SetMusicVolume(bg_music, 0.05f);
-  PlayMusicStream(bg_music);
-
-  // Load SFX
-  hit_sound = LoadSound("assets/sfx_sounds_impact12.wav");
-  SetSoundVolume(hit_sound, 0.5f);
 
   // Init Game Objects
   player = (Entity){.type = ENTITY_PLAYER,
@@ -381,6 +371,7 @@ int main(void) {
   SetTargetFPS(0);
   InitAudioDevice();
   srand((unsigned int)time(NULL));
+  load_assets();
   init_game();
 
 #ifdef PLATFORM_WEB
