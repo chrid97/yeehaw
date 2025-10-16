@@ -210,7 +210,7 @@ void game_update_and_render(Memory *memory) {
     init_game(t);
   }
 
-  UpdateMusicStream(p->bg_music);
+  // UpdateMusicStream(p->bg_music);
 
   // Reset on death
   if (t->player.current_health <= 0) {

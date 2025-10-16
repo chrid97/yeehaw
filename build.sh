@@ -2,6 +2,7 @@
 
 mkdir -p build/
 
+# Ensure raylib is built for system platform
 if [ ! -f ./lib/raylib/src/libraylib.a ]; then
   echo "Building Raylib library..."
   (cd lib/raylib/src && make PLATFORM=PLATFORM_DESKTOP RAYLIB_LIBTYPE=STATIC)
@@ -30,9 +31,15 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 else
   echo "Building for Linux..."
 
-  gcc ./src/main.c -g \
-    -I./lib/raylib/include \
-    -L./lib/raylib/lib -Wl,-rpath=\$ORIGIN/../lib/raylib/lib \
-    -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 \
+  gcc ./src/platform.c -g \
+    -I./lib/raylib/src \
+    ./lib/raylib/src/libraylib.a \
+    -lglfw -lGL -lopenal -lm -lpthread -ldl -lrt -lX11 \
+    -rdynamic \
     -o ./build/horse-riding
+
+  # gcc was trying to read the file before it was done writting, so I create a tmp file and move it once its done writing
+  gcc ./src/main.c -g -fPIC -shared \
+    -I./lib/raylib/src \
+    -o ./build/game.so.tmp && mv ./build/game.so.tmp ./build/game.so
 fi

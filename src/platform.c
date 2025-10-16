@@ -7,6 +7,17 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#ifdef __APPLE__
+#define GET_FILE_MOD_TIME(statbuf) ((statbuf).st_mtimespec.tv_sec)
+#define DYNAMIC_LIB "build/game.dylib"
+#define OPEN dlopen("build/game.dylib", RTLD_NOW);
+#elif defined(__linux__)
+#define GET_FILE_MOD_TIME(statbuf) ((statbuf).st_mtim.tv_sec)
+#define DYNAMIC_LIB "build/game.so"
+#else
+#error "Unsupported platform"
+#endif
+
 Memory memory = {0};
 typedef void (*game_update_and_render_fn)(Memory *memory);
 
@@ -33,28 +44,42 @@ int main(void) {
   InitAudioDevice();
   srand((unsigned int)time(NULL));
   load_assets(&memory.permanent);
-  void *game_lib = dlopen("build/game.dylib", RTLD_NOW);
+
+  void *game_lib = dlopen(DYNAMIC_LIB, RTLD_NOW);
+  if (!game_lib) {
+    fprintf(stderr, "dlopen failed: %s\n", dlerror());
+    return 1;
+  }
+
   game_update_and_render_fn update = dlsym(game_lib, "game_update_and_render");
   if (!update) {
-    printf("Failed to load game function: %s\n", dlerror());
+    fprintf(stderr, "dlsym failed: %s\n", dlerror());
     return 1;
   }
 
   struct stat file_info;
-  stat("build/game.dylib", &file_info);
-  time_t last_write_time = file_info.st_mtimespec.tv_sec;
+  stat(DYNAMIC_LIB, &file_info);
+  time_t last_write_time = GET_FILE_MOD_TIME(file_info);
 
 #ifdef PLATFORM_WEB
   emscripten_set_main_loop(update_draw, 0, 1);
 #else
   while (!WindowShouldClose()) {
-    stat("build/game.dylib", &file_info);
-    if (last_write_time < file_info.st_mtimespec.tv_sec) {
+    stat(DYNAMIC_LIB, &file_info);
+    if (last_write_time < GET_FILE_MOD_TIME(file_info)) {
       printf("Reloading game code...\n");
-      last_write_time = file_info.st_mtimespec.tv_sec;
+      last_write_time = GET_FILE_MOD_TIME(file_info);
       dlclose(game_lib);
-      game_lib = dlopen("build/game.dylib", RTLD_NOW);
+      game_lib = dlopen(DYNAMIC_LIB, RTLD_NOW);
+      if (!game_lib) {
+        fprintf(stderr, "dlopen failed: %s\n", dlerror());
+        return 1;
+      }
       update = dlsym(game_lib, "game_update_and_render");
+      if (!update) {
+        fprintf(stderr, "dlsym failed: %s\n", dlerror());
+        return 1;
+      }
     }
 
     update(&memory);
