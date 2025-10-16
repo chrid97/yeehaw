@@ -1,3 +1,16 @@
+compile_commands.json
+
+# Local build output
 build
+*.so
+*.dylib
+*.exe
+
+# Raylib build artifacts
+lib/raylib/src/*.o
+lib/raylib/src/libraylib.a
+lib/raylib/lib/
+lib/raylib/include/
+
+# OS metadata
 .cache
-lib/raylib/src/librarylib.a
