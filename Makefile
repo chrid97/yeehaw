@@ -11,6 +11,9 @@
 
 SCRIPTS_DIR := scripts
 
+watch:
+	@bash $(SCRIPTS_DIR)/watch.sh
+
 build:
 	@bash $(SCRIPTS_DIR)/build.sh
 

@@ -19,7 +19,6 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <unistd.h>
 
 #ifdef PLATFORM_WEB
@@ -306,7 +305,7 @@ void game_update_and_render(Memory *memory) {
                                entity->height};
       if (CheckCollisionRecs(player_rect, harard_rect) &&
           t->player.damage_cooldown <= 0) {
-        PlaySound(p->hit_sound);
+        // PlaySound(p->hit_sound);
         t->player.current_health--;
         t->player.damage_cooldown = 0.5f;
         t->shake_timer = 0.5f;

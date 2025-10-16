@@ -20,17 +20,6 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     ./lib/raylib/src/libraylib.a \
     -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo -framework OpenGL \
     -o ./build/horse-riding
-
-  # Hot reloadable game library
-  #  This tells the compiler not to resolve raylib symbols that
-  #  it'll exist at runtime
-  #  -undefined dynamic_lookup
-  clang -g -Wall -Wextra -dynamiclib -fPIC \
-    src/main.c \
-    -I./lib/raylib/src/ \
-    -undefined dynamic_lookup \
-    -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo -framework OpenGL \
-    -o ./build/game.dylib
 else
   echo "🐧 Building for Linux..."
 
@@ -40,12 +29,8 @@ else
     -lglfw -lGL -lopenal -lm -lpthread -ldl -lrt -lX11 \
     -rdynamic \
     -o ./build/horse-riding
-
-  # gcc was trying to read the file before it was done writting, so I create a tmp file and move it once its done writing
-  gcc ./src/main.c -g -fPIC -shared \
-    -I./lib/raylib/src \
-    -o ./build/game.so.tmp && mv ./build/game.so.tmp ./build/game.so
-
 fi
+
+bash scripts/build_game.sh
 
 echo "✅ Build successful!"
