@@ -8,7 +8,6 @@
 // chasing a higher score you have an incentive to play with fewer lives
 // (TODO) Fix drawing background/world
 // (TODO) Make input state machine
-// (TODO) Fix build scripts
 // (TODO) Squish player on damage
 // (TODO) Implement shadows
 #include "main.h"

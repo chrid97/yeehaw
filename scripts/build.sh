@@ -1,15 +1,18 @@
 #!/bin/bash
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
+cd $PROJECT_ROOT
 mkdir -p build/
 
 # Ensure raylib is built for system platform
 if [ ! -f ./lib/raylib/src/libraylib.a ]; then
-  echo "Building Raylib library..."
+  echo "📦 Building Raylib library..."
   (cd lib/raylib/src && make PLATFORM=PLATFORM_DESKTOP RAYLIB_LIBTYPE=STATIC)
 fi
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  echo "Building for macOS..."
+  echo "🍎 Building for macOS..."
 
   clang -g -Wall -Wextra \
     src/platform.c \
@@ -29,7 +32,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo -framework OpenGL \
     -o ./build/game.dylib
 else
-  echo "Building for Linux..."
+  echo "🐧 Building for Linux..."
 
   gcc ./src/platform.c -g \
     -I./lib/raylib/src \
@@ -42,4 +45,7 @@ else
   gcc ./src/main.c -g -fPIC -shared \
     -I./lib/raylib/src \
     -o ./build/game.so.tmp && mv ./build/game.so.tmp ./build/game.so
+
 fi
+
+echo "✅ Build successful!"
