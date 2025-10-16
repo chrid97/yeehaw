@@ -1,4 +1,5 @@
 #include "main.h" // your own shared types
+#include "platform.h"
 #include "raylib.h"
 #include <math.h>
 #include <stdlib.h>
@@ -11,8 +12,8 @@ int random_between(int min, int max) {
 }
 
 Vector2 isometric_projection(Vector3 pos) {
-  return (Vector2){(pos.x - pos.y) * (TILE_WIDTH / 2.0f),
-                   (pos.x + pos.y) * (TILE_HEIGHT / 2.0f) - pos.z};
+  return (Vector2){(pos.x - pos.y) * (TILE_SIZE / 2.0f),
+                   (pos.x + pos.y) * (TILE_SIZE / 4.0f) - pos.z};
 }
 
 // Sort pointers in draw_list by on-screen depth

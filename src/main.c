@@ -1,9 +1,18 @@
+// (TODO) Add file watcher to platform code to hot reload
+// (TODO) split out update code from game_update_and_render
+// (TODO) auto generate compile_commands.json
+//
+// (MAYBE) in hades you can get extra lives, maybe you can do the same thing
+// here but playign with fewer lives gives you some bonus. Myabe a score bonus?
+// This way you can play through the game on easy mode if you want but if youre
+// chasing a higher score you have an incentive to play with fewer lives
 // (TODO) Fix drawing background/world
 // (TODO) Make input state machine
-// (TODO) fix build scripts
+// (TODO) Fix build scripts
 // (TODO) Squish player on damage
 // (TODO) Implement shadows
 #include "main.h"
+#include "platform.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "util.c"
@@ -18,12 +27,11 @@
 #include <emscripten/emscripten.h>
 #endif
 
-GameState game_state;
+// Game boundaries
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
 
-Entity *entity_spawn(float x, float y, EntityType type) {
-  TransientState *t = &game_state.transient;
+Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
   assert(t->entity_count < MAX_ENTITIES && "Entity overflow!");
   t->entities[t->entity_count++] = (Entity){.pos.x = x,
                                             .pos.y = y,
@@ -35,26 +43,7 @@ Entity *entity_spawn(float x, float y, EntityType type) {
   return &t->entities[t->entity_count - 1];
 }
 
-// --------------------------------------------------
-// Asset Loading
-// --------------------------------------------------
-void load_assets() {
-  PermanentStorage *p = &game_state.permanent;
-
-  // Load textures
-  p->tilesheet = LoadTexture("assets/tiles.png");
-
-  // Load Music
-  p->bg_music = LoadMusicStream("assets/spagetti-western.ogg");
-  SetMusicVolume(p->bg_music, 0.05f);
-  PlayMusicStream(p->bg_music);
-
-  // Load SFX
-  p->hit_sound = LoadSound("assets/sfx_sounds_impact12.wav");
-  SetSoundVolume(p->hit_sound, 0.5f);
-}
-
-void load_map(const char *path) {
+void load_map(TransientStorage *t, const char *path) {
   FILE *f = fopen(path, "r");
   if (!f) {
     printf("Failed to open file!\n");
@@ -67,7 +56,7 @@ void load_map(const char *path) {
     for (int x = 0; line[x] != '\0' && line[x] != '\n'; x++) {
       char c = line[x];
       if (c == '^') {
-        entity_spawn(x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
+        entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
       }
     }
     y -= 0.5f;
@@ -78,9 +67,8 @@ void load_map(const char *path) {
 // --------------------------------------------------
 // Game Initialization (resets transient state only)
 // --------------------------------------------------
-void init_game(void) {
-  TransientState *t = &game_state.transient;
-  *t = (TransientState){0};
+void init_game(TransientStorage *t) {
+  *t = (TransientStorage){0};
 
   // Initialize entities off screen
   for (int i = 0; i < MAX_ENTITIES; i++) {
@@ -98,15 +86,15 @@ void init_game(void) {
 
   t->camera.zoom = 1.0f;
 
-  load_map("assets/map.txt");
+  load_map(t, "assets/map.txt");
 }
 
 // --------------------------------------------------
 // Rendering
 // --------------------------------------------------
-void render(GameState *gs) {
+void render(Memory *gs) {
   PermanentStorage *p = &gs->permanent;
-  TransientState *t = &gs->transient;
+  TransientStorage *t = &gs->transient;
   Texture2D *tilesheet = &p->tilesheet;
 
   // Update Draw List
@@ -136,7 +124,7 @@ void render(GameState *gs) {
     }
 
     // Play area
-    for (int x = PLAY_AREA_START; x < PLAY_AREA_END; x++) {
+    for (int x = -5; x < 8; x++) {
       Vector2 screen = isometric_projection((Vector3){x, y, 0});
       Rectangle floor_tile = get_tile_source_rect(tilesheet, 9);
       DrawTextureRec(p->tilesheet, floor_tile, screen, WHITE);
@@ -214,14 +202,19 @@ void render(GameState *gs) {
   EndDrawing();
 }
 
-void game_update_and_render(void) {
-  PermanentStorage *p = &game_state.permanent;
-  TransientState *t = &game_state.transient;
+void game_update_and_render(Memory *memory) {
+  PermanentStorage *p = &memory->permanent;
+  TransientStorage *t = &memory->transient;
+
+  if (!p) {
+    init_game(t);
+  }
+
   UpdateMusicStream(p->bg_music);
 
   // Reset on death
   if (t->player.current_health <= 0) {
-    init_game();
+    init_game(t);
   }
 
   float frame_dt = GetFrameTime();
@@ -243,7 +236,7 @@ void game_update_and_render(void) {
     p->debug_on = !p->debug_on;
   }
   if (IsKeyPressed(KEY_R)) {
-    init_game();
+    init_game(t);
   }
   int steps = 0;
   const int MAX_STEPS = 8; // safety cap
@@ -295,9 +288,8 @@ void game_update_and_render(void) {
     t->player.color = WHITE;
     t->game_timer += dt;
     // (TODO)clamp find a better way to reuse these tile values
-    t->player.pos.x =
-        Clamp(t->player.pos.x, PLAY_AREA_START + t->player.width * 2.0f,
-              8 + t->player.width);
+    t->player.pos.x = Clamp(t->player.pos.x, -5 + t->player.width * 2.0f,
+                            8 + t->player.width);
     Vector2 player_screen =
         isometric_projection((Vector3){0, t->player.pos.y, 0});
 
@@ -345,25 +337,5 @@ void game_update_and_render(void) {
     t->accumulator -= FIXED_DT;
   }
 
-  render(&game_state);
-}
-
-int main(void) {
-  InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
-  SetTargetFPS(0);
-  InitAudioDevice();
-  srand((unsigned int)time(NULL));
-  load_assets();
-  init_game();
-
-#ifdef PLATFORM_WEB
-  emscripten_set_main_loop(update_draw, 0, 1);
-#else
-  while (!WindowShouldClose()) {
-    game_update_and_render();
-  }
-#endif
-
-  CloseWindow();
-  return 0;
+  render(memory);
 }

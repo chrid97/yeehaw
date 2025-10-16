@@ -1,16 +1,15 @@
 [
   {
     "arguments": [
-      "/usr/bin/gcc",
+      "/usr/bin/cc",
       "-c",
-      "-g",
-      "-I./lib/raylib/include",
+      "-I/opt/homebrew/Cellar/raylib/5.5/include",
       "-o",
       "./build/horse-riding",
       "./src/main.c"
     ],
-    "directory": "/home/chris/repos/yeehaw",
-    "file": "/home/chris/repos/yeehaw/src/main.c",
-    "output": "/home/chris/repos/yeehaw/build/horse-riding"
+    "directory": "/Users/chris/Games/horse-riding",
+    "file": "/Users/chris/Games/horse-riding/src/main.c",
+    "output": "/Users/chris/Games/horse-riding/build/horse-riding"
   }
 ]
