@@ -1,3 +1,5 @@
+// (TODO) Fix drawing background/world
+// (TODO) Make input state machine
 // (TODO) fix build scripts
 // (TODO) Squish player on damage
 // (TODO) Implement shadows
@@ -17,36 +19,39 @@
 #endif
 
 GameState game_state;
-Texture2D tilesheet;
-static Music bg_music;
-static Sound hit_sound;
-static bool debug_on = false;
-static double accumulator = 0.0;
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
 
 Entity *entity_spawn(float x, float y, EntityType type) {
-  assert(game_state.entity_count < MAX_ENTITIES && "Entity overflow!");
-  game_state.entities[game_state.entity_count++] = (Entity){.pos.x = x,
-                                                            .pos.y = y,
-                                                            .width = 1,
-                                                            .height = 1,
-                                                            .type = type,
-                                                            .color = WHITE};
+  TransientState *t = &game_state.transient;
+  assert(t->entity_count < MAX_ENTITIES && "Entity overflow!");
+  t->entities[t->entity_count++] = (Entity){.pos.x = x,
+                                            .pos.y = y,
+                                            .width = 1,
+                                            .height = 1,
+                                            .type = type,
+                                            .color = WHITE};
 
-  return &game_state.entities[game_state.entity_count - 1];
+  return &t->entities[t->entity_count - 1];
 }
 
+// --------------------------------------------------
+// Asset Loading
+// --------------------------------------------------
 void load_assets() {
+  PermanentStorage *p = &game_state.permanent;
+
   // Load textures
-  tilesheet = LoadTexture("assets/tiles.png");
+  p->tilesheet = LoadTexture("assets/tiles.png");
+
   // Load Music
-  bg_music = LoadMusicStream("assets/spagetti-western.ogg");
-  SetMusicVolume(bg_music, 0.05f);
-  PlayMusicStream(bg_music);
+  p->bg_music = LoadMusicStream("assets/spagetti-western.ogg");
+  SetMusicVolume(p->bg_music, 0.05f);
+  PlayMusicStream(p->bg_music);
+
   // Load SFX
-  hit_sound = LoadSound("assets/sfx_sounds_impact12.wav");
-  SetSoundVolume(hit_sound, 0.5f);
+  p->hit_sound = LoadSound("assets/sfx_sounds_impact12.wav");
+  SetSoundVolume(p->hit_sound, 0.5f);
 }
 
 void load_map(const char *path) {
@@ -70,144 +75,138 @@ void load_map(const char *path) {
   fclose(f);
 }
 
+// --------------------------------------------------
+// Game Initialization (resets transient state only)
+// --------------------------------------------------
 void init_game(void) {
-  game_state = (GameState){0};
+  TransientState *t = &game_state.transient;
+  *t = (TransientState){0};
 
-  // Render empty entities off screen
+  // Initialize entities off screen
   for (int i = 0; i < MAX_ENTITIES; i++) {
-    game_state.entities[i].pos = (Vector2){9999.0f, 9999.0f};
-    game_state.entities[i].type = ENTITY_NONE;
+    t->entities[i].pos = (Vector2){9999.0f, 9999.0f};
+    t->entities[i].type = ENTITY_NONE;
   }
 
-  game_state.player.type = ENTITY_PLAYER;
-  game_state.player.width = 0.35f;
-  game_state.player.height = 0.75f;
-  game_state.player.color = WHITE;
-  game_state.player.current_health = 2;
-  game_state.player.max_health = 2;
+  // Initialize player
+  t->player.type = ENTITY_PLAYER;
+  t->player.width = 0.35f;
+  t->player.height = 0.75f;
+  t->player.color = WHITE;
+  t->player.current_health = 2;
+  t->player.max_health = 2;
 
-  game_state.camera.zoom = 1.0f;
+  t->camera.zoom = 1.0f;
 
   load_map("assets/map.txt");
 }
 
-void render(GameState *game_state) {
+// --------------------------------------------------
+// Rendering
+// --------------------------------------------------
+void render(GameState *gs) {
+  PermanentStorage *p = &gs->permanent;
+  TransientState *t = &gs->transient;
+  Texture2D *tilesheet = &p->tilesheet;
+
   // Update Draw List
   int draw_count = 0;
-  for (int i = 0; i < game_state->entity_count; i++) {
-    game_state->draw_list[draw_count++] = &game_state->entities[i];
+  for (int i = 0; i < t->entity_count; i++) {
+    t->draw_list[draw_count++] = &t->entities[i];
   }
+  t->draw_list[draw_count++] = &t->player;
 
-  game_state->draw_list[draw_count++] = &game_state->player;
-  qsort(game_state->draw_list, draw_count, sizeof(Entity *),
+  qsort(t->draw_list, draw_count, sizeof(Entity *),
         compare_entities_for_draw_order);
+
   BeginDrawing();
   ClearBackground(ORANGE);
-  BeginMode2D(game_state->camera);
+  BeginMode2D(t->camera);
 
-  int tile_y = floorf(game_state->player.pos.y);
-  int tile_y_offset = 30;
-  Rectangle unplayable_area_tile = get_tile_source_rect(36);
-  // Draw world
+  int tile_y = floorf(t->player.pos.y);
+  Rectangle tile = get_tile_source_rect(tilesheet, 36);
+
+  // --- Draw world ---
   // (NOTE) figure out how to start from 0 instead of a negative number
   for (int y = tile_y - 30; y < tile_y + 14; y++) {
-    // draw from the edge of the screen to the player area (-5)
+    // Left side
     for (int x = -21; x < -5; x++) {
-      Vector3 world = {x, y, 0};
-      Vector2 screen = isometric_projection(world);
-      DrawTextureRec(tilesheet, unplayable_area_tile, screen, WHITE);
+      Vector2 screen = isometric_projection((Vector3){x, y, 0});
+      DrawTextureRec(p->tilesheet, tile, screen, WHITE);
     }
 
-    // Draw play area
+    // Play area
     for (int x = PLAY_AREA_START; x < PLAY_AREA_END; x++) {
-      Vector3 world = {x, y, 0};
-      Vector2 screen = isometric_projection(world);
-      // not sure if this shit smooths teh game either, idts
-      screen.x = floorf(screen.x);
-      screen.y = floorf(screen.y);
-      Rectangle floor_tile = get_tile_source_rect(9);
-      DrawTextureRec(tilesheet, floor_tile, screen, WHITE);
+      Vector2 screen = isometric_projection((Vector3){x, y, 0});
+      Rectangle floor_tile = get_tile_source_rect(tilesheet, 9);
+      DrawTextureRec(p->tilesheet, floor_tile, screen, WHITE);
     }
 
-    // draw from the end of the play are to the right half of the screen
+    // Right side
     for (int x = 8; x < 22; x++) {
-      Vector3 world = {x, y, 0};
-      Vector2 screen = isometric_projection(world);
-      DrawTextureRec(tilesheet, unplayable_area_tile, screen, WHITE);
+      Vector2 screen = isometric_projection((Vector3){x, y, 0});
+      DrawTextureRec(p->tilesheet, tile, screen, WHITE);
     }
   }
 
   // --- Draw Entities ---
   for (int i = 0; i < draw_count; i++) {
-    Entity *entity = game_state->draw_list[i];
-    // cull
-    if (entity->pos.y < game_state->player.pos.y - 40 ||
-        entity->pos.y > game_state->player.pos.y + 20) {
+    Entity *entity = t->draw_list[i];
+    // Cull entities the player can't see
+    if (entity->pos.y < t->player.pos.y - 40 ||
+        entity->pos.y > t->player.pos.y + 20) {
       continue;
     }
 
     Vector2 projected =
         isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
-    if (entity->type == ENTITY_PLAYER) {
-      // DRAW PLAYER
-      Vector3 cube_center = {
-          game_state->player.pos.x + game_state->player.width / 2.0f,
-          game_state->player.pos.y + game_state->player.height / 2.0f, 0};
-      draw_iso_cube(cube_center, game_state->player.width,
-                    game_state->player.height, 10.5f, game_state->player.angle,
-                    game_state->player.color);
+    switch (entity->type) {
+    case ENTITY_PLAYER: {
+      Vector3 cube_center = {t->player.pos.x + t->player.width / 2.0f,
+                             t->player.pos.y + t->player.height / 2.0f, 0};
+      draw_iso_cube(cube_center, t->player.width, t->player.height, 10.5f,
+                    t->player.angle, t->player.color);
+    } break;
 
-    } else if (entity->type == ENTITY_HAZARD) {
-      Rectangle source = get_tile_source_rect(55);
+    case ENTITY_HAZARD: {
+      Rectangle src = get_tile_source_rect(tilesheet, 55);
       Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
       Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
-      DrawTexturePro(tilesheet, source, dst, origin, 0, entity->color);
-    } else if (entity->type == ENTITY_BULLET) {
+      DrawTexturePro(p->tilesheet, src, dst, origin, 0, entity->color);
+    } break;
+
+    case ENTITY_BULLET: {
       DrawRectangle(projected.x, projected.y, entity->width * 32,
                     entity->height * 16, entity->color);
+    } break;
+
+    default:
+      break;
     }
 
-    if (debug_on && entity->type != ENTITY_BULLET) {
-      Rectangle rect = {entity->pos.x, entity->pos.y, entity->width,
-                        entity->height};
-
-      // Project corners to screen
-      Vector2 p1 = isometric_projection((Vector3){rect.x, rect.y, 0});
-      Vector2 p2 =
-          isometric_projection((Vector3){rect.x + rect.width, rect.y, 0});
-      Vector2 p3 = isometric_projection(
-          (Vector3){rect.x + rect.width, rect.y + rect.height, 0});
-      Vector2 p4 =
-          isometric_projection((Vector3){rect.x, rect.y + rect.height, 0});
-
-      // Draw outline in world space (red for hazards, green for player)
-      Color c = (entity->type == ENTITY_HAZARD) ? RED : GREEN;
-      DrawLineV(p1, p2, c);
-      DrawLineV(p2, p3, c);
-      DrawLineV(p3, p4, c);
-      DrawLineV(p4, p1, c);
+    if (p->debug_on && entity->type != ENTITY_BULLET) {
+      // Draw Collision Debug Iso Box
+      draw_entity_collision_box(entity);
+      DrawPlayerDebug(&t->player);
     }
   }
 
-  if (debug_on) {
-    DrawPlayerDebug(&game_state->player);
-  }
   EndMode2D();
 
   // Draw player health
-  for (int i = 0; i < game_state->player.max_health; i++) {
+  for (int i = 0; i < t->player.max_health; i++) {
     DrawRectangle((i * 35), 30, 25, 25,
-                  i < game_state->player.current_health ? RED : GRAY);
+                  i < t->player.current_health ? RED : GRAY);
   }
 
   // Scale game to window size
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
-  game_state->camera.zoom = fminf(scale_x, scale_y);
+  t->camera.zoom = fminf(scale_x, scale_y);
 
   float scale = fminf(scale_x, scale_y);
   int font_size = (int)(40 * scale);
-  const char *timer_text = TextFormat("%.1f", game_state->game_timer);
+  const char *timer_text = TextFormat("%.1f", t->game_timer);
   int text_width = MeasureText(timer_text, font_size);
   DrawText(timer_text, (GetScreenWidth() - text_width) / 2, 0, font_size,
            WHITE);
@@ -216,38 +215,39 @@ void render(GameState *game_state) {
 }
 
 void game_update_and_render(void) {
-  UpdateMusicStream(bg_music);
+  PermanentStorage *p = &game_state.permanent;
+  TransientState *t = &game_state.transient;
+  UpdateMusicStream(p->bg_music);
 
   // Reset on death
-  if (game_state.player.current_health <= 0) {
+  if (t->player.current_health <= 0) {
     init_game();
   }
 
   float frame_dt = GetFrameTime();
-  accumulator += frame_dt;
+  t->accumulator += frame_dt;
 
   // --- Input ---
   if (IsKeyPressed(KEY_SPACE)) {
-    game_state.entities[game_state.entity_count++] =
-        (Entity){.pos.x = game_state.player.pos.x,
-                 .pos.y = game_state.player.pos.y,
-                 .color = RED,
-                 .width = 0.2,
-                 .height = 0.2,
-                 .vel.x = 1.0f,
-                 .vel.y = 1.0f,
-                 .type = ENTITY_BULLET};
+    t->entities[t->entity_count++] = (Entity){.pos.x = t->player.pos.x,
+                                              .pos.y = t->player.pos.y,
+                                              .color = RED,
+                                              .width = 0.2,
+                                              .height = 0.2,
+                                              .vel.x = 1.0f,
+                                              .vel.y = 1.0f,
+                                              .type = ENTITY_BULLET};
   }
 
   if (IsKeyPressed(KEY_P)) {
-    debug_on = !debug_on;
+    p->debug_on = !p->debug_on;
   }
   if (IsKeyPressed(KEY_R)) {
     init_game();
   }
   int steps = 0;
   const int MAX_STEPS = 8; // safety cap
-  while (accumulator >= FIXED_DT && steps < MAX_STEPS) {
+  while (t->accumulator >= FIXED_DT && steps < MAX_STEPS) {
     float dt = FIXED_DT;
     float turn_input = 0;
     if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
@@ -262,64 +262,63 @@ void game_update_and_render(void) {
     float turn_speed = 540.0f; // how fast angle responds
     float turn_drag = 50.0f;   // how quickly rotation stops leaning
     float target_angle = 45.0f * turn_input;
-    float angle_accel = (target_angle - game_state.player.angle) * turn_speed;
-    game_state.player.angle_vel += angle_accel * dt;
-    game_state.player.angle_vel -= game_state.player.angle_vel * turn_drag * dt;
-    game_state.player.angle += game_state.player.angle_vel * dt;
+    float angle_accel = (target_angle - t->player.angle) * turn_speed;
+    t->player.angle_vel += angle_accel * dt;
+    t->player.angle_vel -= t->player.angle_vel * turn_drag * dt;
+    t->player.angle += t->player.angle_vel * dt;
 
     // --- Movement ---
-    Vector2 forward = {cosf((game_state.player.angle - 90.0f) * DEG2RAD),
-                       sinf((game_state.player.angle - 90.0f) * DEG2RAD)};
+    Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
+                       sinf((t->player.angle - 90.0f) * DEG2RAD)};
 
     // Forward motion (always galloping)
     float forward_speed = 10.0f;
-    game_state.player.pos.y -= forward_speed * dt;
+    t->player.pos.y -= forward_speed * dt;
 
     // Lateral motion (guiding left/right)
     float accel_strength = 250.0f; // low acceleration = gentle pull on reins
     float drag = 25.0f;            // high drag = instant correction after input
 
     Vector2 accel = {forward.x * accel_strength, 0}; // only lateral accel
-    game_state.player.vel.x += accel.x * dt;
-    game_state.player.vel.x -= game_state.player.vel.x * drag * dt;
+    t->player.vel.x += accel.x * dt;
+    t->player.vel.x -= t->player.vel.x * drag * dt;
 
     // direction-flip damping
-    if ((turn_input > 0 && game_state.player.vel.x < 0) ||
-        (turn_input < 0 && game_state.player.vel.x > 0)) {
-      game_state.player.vel.x *= 0.75f; // tiny resistance when switching
+    if ((turn_input > 0 && t->player.vel.x < 0) ||
+        (turn_input < 0 && t->player.vel.x > 0)) {
+      t->player.vel.x *= 0.75f; // tiny resistance when switching
     }
 
-    game_state.player.pos.x += game_state.player.vel.x * dt;
+    t->player.pos.x += t->player.vel.x * dt;
 
     // --- Update ---
-    game_state.player.color = WHITE;
-    game_state.game_timer += dt;
+    t->player.color = WHITE;
+    t->game_timer += dt;
     // (TODO)clamp find a better way to reuse these tile values
-    game_state.player.pos.x =
-        Clamp(game_state.player.pos.x,
-              PLAY_AREA_START + game_state.player.width * 2.0f,
-              8 + game_state.player.width);
+    t->player.pos.x =
+        Clamp(t->player.pos.x, PLAY_AREA_START + t->player.width * 2.0f,
+              8 + t->player.width);
     Vector2 player_screen =
-        isometric_projection((Vector3){0, game_state.player.pos.y, 0});
+        isometric_projection((Vector3){0, t->player.pos.y, 0});
 
     // Update camera position to follow player
-    game_state.camera.target = player_screen;
-    game_state.camera.offset =
+    t->camera.target = player_screen;
+    t->camera.offset =
         (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
     // Player-entity collision
-    Rectangle player_rect = {game_state.player.pos.x, game_state.player.pos.y,
-                             game_state.player.width, game_state.player.height};
-    for (int i = 0; i < game_state.entity_count; i++) {
-      Entity *entity = &game_state.entities[i];
+    Rectangle player_rect = {t->player.pos.x, t->player.pos.y, t->player.width,
+                             t->player.height};
+    for (int i = 0; i < t->entity_count; i++) {
+      Entity *entity = &t->entities[i];
       Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
                                entity->height};
       if (CheckCollisionRecs(player_rect, harard_rect) &&
-          game_state.player.damage_cooldown <= 0) {
-        PlaySound(hit_sound);
-        game_state.player.current_health--;
-        game_state.player.damage_cooldown = 0.5f;
-        game_state.shake_timer = 0.5f;
+          t->player.damage_cooldown <= 0) {
+        PlaySound(p->hit_sound);
+        t->player.current_health--;
+        t->player.damage_cooldown = 0.5f;
+        t->shake_timer = 0.5f;
 
         DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
                            player_rect.height, BLACK);
@@ -330,20 +329,20 @@ void game_update_and_render(void) {
       }
     }
 
-    if (game_state.player.damage_cooldown > 0.0f) {
-      game_state.player.damage_cooldown -= dt;
-      game_state.player.color = RED;
+    if (t->player.damage_cooldown > 0.0f) {
+      t->player.damage_cooldown -= dt;
+      t->player.color = RED;
     }
 
     // Screen shake
-    if (game_state.shake_timer > 0) {
-      game_state.shake_timer -= dt;
+    if (t->shake_timer > 0) {
+      t->shake_timer -= dt;
       float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
       float shake_magnitude = 10.0f;
-      game_state.camera.target.x += offset_x * shake_magnitude;
+      t->camera.target.x += offset_x * shake_magnitude;
     }
     steps++;
-    accumulator -= FIXED_DT;
+    t->accumulator -= FIXED_DT;
   }
 
   render(&game_state);
@@ -351,7 +350,6 @@ void game_update_and_render(void) {
 
 int main(void) {
   InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
-  // Uncap FPS because it makes my game feel like tash
   SetTargetFPS(0);
   InitAudioDevice();
   srand((unsigned int)time(NULL));

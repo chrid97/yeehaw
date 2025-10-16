@@ -5,6 +5,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// -------------------------------------
+// Constants
+// -------------------------------------
 #define TILE_SIZE 32
 #define TILE_WIDTH 32
 #define TILE_HEIGHT 16
@@ -15,6 +18,9 @@
 
 #define MAX_ENTITIES 10000
 
+// -------------------------------------
+// Enums
+// -------------------------------------
 typedef enum { GAME_OVER, PLAYING } State;
 
 typedef enum {
@@ -42,6 +48,9 @@ typedef struct {
   Color color;
 } Entity;
 
+// -------------------------------------
+// Transient (resettable) storage
+// -------------------------------------
 typedef struct {
   State state;
 
@@ -55,6 +64,23 @@ typedef struct {
   float game_timer;
 
   Camera2D camera;
+
+  double accumulator;
+} TransientState;
+
+// -------------------------------------
+// Permanent (persistent) storage (Lifetime is the duration of the game)
+// -------------------------------------
+typedef struct {
+  Texture2D tilesheet;
+  Music bg_music;
+  Sound hit_sound;
+  bool debug_on;
+} PermanentStorage;
+
+typedef struct {
+  PermanentStorage permanent;
+  TransientState transient;
 } GameState;
 
 #endif
