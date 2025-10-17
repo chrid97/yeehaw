@@ -16,7 +16,6 @@
 // -------------------------------------
 // Enums
 // -------------------------------------
-typedef enum { GAME_OVER, PLAYING } State;
 
 typedef enum {
   ENTITY_NONE = 0,
@@ -47,8 +46,6 @@ typedef struct {
 // Transient (resettable) storage
 // -------------------------------------
 typedef struct {
-  State state;
-
   Entity entities[MAX_ENTITIES];
   int entity_count;
   Entity *draw_list[MAX_ENTITIES];

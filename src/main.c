@@ -83,6 +83,7 @@ void init_game(TransientStorage *t) {
   t->camera.zoom = 1.0f;
 
   load_map(t, "assets/map.txt");
+  t->game_initialized = true;
 }
 
 // --------------------------------------------------
@@ -91,20 +92,6 @@ void init_game(TransientStorage *t) {
 void update(Memory *memory) {
   PermanentStorage *p = &memory->permanent;
   TransientStorage *t = &memory->transient;
-
-  if (!p) {
-    init_game(t);
-  }
-
-  UpdateMusicStream(p->bg_music);
-
-  // Reset on death
-  if (t->player.current_health <= 0) {
-    init_game(t);
-  }
-
-  float frame_dt = GetFrameTime();
-  t->accumulator += frame_dt;
 
   // --- Input ---
   if (IsKeyPressed(KEY_SPACE)) {
@@ -124,6 +111,21 @@ void update(Memory *memory) {
   if (IsKeyPressed(KEY_R)) {
     init_game(t);
   }
+
+  if (!t->game_initialized) {
+    init_game(t);
+  }
+
+  UpdateMusicStream(p->bg_music);
+
+  // Reset on death
+  if (t->player.current_health <= 0) {
+    // init_game(t);
+    return;
+  }
+
+  float frame_dt = GetFrameTime();
+  t->accumulator += frame_dt;
   int steps = 0;
   const int MAX_STEPS = 8; // safety cap
   while (t->accumulator >= FIXED_DT && steps < MAX_STEPS) {
@@ -323,6 +325,8 @@ void render(Memory *gs) {
   }
 
   // Scale game to window size
+  // maybe i can store the scale in my game state structs
+  // we'd only have to update these on screen resize
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
   t->camera.zoom = fminf(scale_x, scale_y);
@@ -333,6 +337,23 @@ void render(Memory *gs) {
   int text_width = MeasureText(timer_text, font_size);
   DrawText(timer_text, (GetScreenWidth() - text_width) / 2, 0, font_size,
            WHITE);
+
+  if (t->player.current_health <= 0) {
+    ClearBackground(BLACK);
+
+    int game_over_font_size = (int)(40 * scale);
+    const char *game_over_text = "GAME OVER";
+    int text_width = MeasureText(game_over_text, game_over_font_size);
+    DrawText(game_over_text, (GetScreenWidth() - text_width) / 2.0f,
+             (GetScreenHeight() - font_size * 2) / 2.0f, font_size, WHITE);
+
+    int restart_font_size = (int)(12 * scale);
+    // maybe change this to press any key to restart
+    const char *restart_text = "PRESS R TO RESTART";
+    int restart_width = MeasureText(game_over_text, game_over_font_size);
+    DrawText(restart_text, (GetScreenWidth() - (restart_width / 2.0f)) / 2.0f,
+             (GetScreenHeight()) / 2.0f + 10, restart_font_size, RED);
+  }
   DrawFPS(0, 0);
   EndDrawing();
 }
