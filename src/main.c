@@ -1,5 +1,3 @@
-// (TODO) Add file watcher to platform code to hot reload
-// (TODO) split out update code from game_update_and_render
 // (TODO) auto generate compile_commands.json
 //
 // (MAYBE) in hades you can get extra lives, maybe you can do the same thing
@@ -88,119 +86,9 @@ void init_game(TransientStorage *t) {
 }
 
 // --------------------------------------------------
-// Rendering
+// Update
 // --------------------------------------------------
-void render(Memory *gs) {
-  PermanentStorage *p = &gs->permanent;
-  TransientStorage *t = &gs->transient;
-  Texture2D *tilesheet = &p->tilesheet;
-
-  // Update Draw List
-  int draw_count = 0;
-  for (int i = 0; i < t->entity_count; i++) {
-    t->draw_list[draw_count++] = &t->entities[i];
-  }
-  t->draw_list[draw_count++] = &t->player;
-
-  qsort(t->draw_list, draw_count, sizeof(Entity *),
-        compare_entities_for_draw_order);
-
-  BeginDrawing();
-  ClearBackground(ORANGE);
-  BeginMode2D(t->camera);
-
-  int tile_y = floorf(t->player.pos.y);
-  Rectangle tile = get_tile_source_rect(tilesheet, 36);
-
-  // --- Draw world ---
-  // (NOTE) figure out how to start from 0 instead of a negative number
-  for (int y = tile_y - 30; y < tile_y + 14; y++) {
-    // Left side
-    for (int x = -21; x < -5; x++) {
-      Vector2 screen = isometric_projection((Vector3){x, y, 0});
-      DrawTextureRec(p->tilesheet, tile, screen, WHITE);
-    }
-
-    // Play area
-    for (int x = -5; x < 8; x++) {
-      Vector2 screen = isometric_projection((Vector3){x, y, 0});
-      Rectangle floor_tile = get_tile_source_rect(tilesheet, 9);
-      DrawTextureRec(p->tilesheet, floor_tile, screen, WHITE);
-    }
-
-    // Right side
-    for (int x = 8; x < 22; x++) {
-      Vector2 screen = isometric_projection((Vector3){x, y, 0});
-      DrawTextureRec(p->tilesheet, tile, screen, WHITE);
-    }
-  }
-
-  // --- Draw Entities ---
-  for (int i = 0; i < draw_count; i++) {
-    Entity *entity = t->draw_list[i];
-    // Cull entities the player can't see
-    if (entity->pos.y < t->player.pos.y - 40 ||
-        entity->pos.y > t->player.pos.y + 20) {
-      continue;
-    }
-
-    Vector2 projected =
-        isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
-    switch (entity->type) {
-    case ENTITY_PLAYER: {
-      Vector3 cube_center = {t->player.pos.x + t->player.width / 2.0f,
-                             t->player.pos.y + t->player.height / 2.0f, 0};
-      draw_iso_cube(cube_center, t->player.width, t->player.height, 10.5f,
-                    t->player.angle, t->player.color);
-    } break;
-
-    case ENTITY_HAZARD: {
-      Rectangle src = get_tile_source_rect(tilesheet, 55);
-      Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
-      Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
-      DrawTexturePro(p->tilesheet, src, dst, origin, 0, entity->color);
-    } break;
-
-    case ENTITY_BULLET: {
-      DrawRectangle(projected.x, projected.y, entity->width * 32,
-                    entity->height * 16, entity->color);
-    } break;
-
-    default:
-      break;
-    }
-
-    if (p->debug_on && entity->type != ENTITY_BULLET) {
-      // Draw Collision Debug Iso Box
-      draw_entity_collision_box(entity);
-      DrawPlayerDebug(&t->player);
-    }
-  }
-
-  EndMode2D();
-
-  // Draw player health
-  for (int i = 0; i < t->player.max_health; i++) {
-    DrawRectangle((i * 35), 30, 25, 25,
-                  i < t->player.current_health ? RED : GRAY);
-  }
-
-  // Scale game to window size
-  float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
-  float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
-  t->camera.zoom = fminf(scale_x, scale_y);
-
-  float scale = fminf(scale_x, scale_y);
-  int font_size = (int)(40 * scale);
-  const char *timer_text = TextFormat("%.1f", t->game_timer);
-  int text_width = MeasureText(timer_text, font_size);
-  DrawText(timer_text, (GetScreenWidth() - text_width) / 2, 0, font_size,
-           WHITE);
-  DrawFPS(0, 0);
-  EndDrawing();
-}
-
-void game_update_and_render(Memory *memory) {
+void update(Memory *memory) {
   PermanentStorage *p = &memory->permanent;
   TransientStorage *t = &memory->transient;
 
@@ -208,7 +96,7 @@ void game_update_and_render(Memory *memory) {
     init_game(t);
   }
 
-  // UpdateMusicStream(p->bg_music);
+  UpdateMusicStream(p->bg_music);
 
   // Reset on death
   if (t->player.current_health <= 0) {
@@ -334,6 +222,122 @@ void game_update_and_render(Memory *memory) {
     steps++;
     t->accumulator -= FIXED_DT;
   }
+}
 
+// --------------------------------------------------
+// Rendering
+// --------------------------------------------------
+void render(Memory *gs) {
+  PermanentStorage *p = &gs->permanent;
+  TransientStorage *t = &gs->transient;
+  Texture2D *tilesheet = &p->tilesheet;
+
+  // Update Draw List
+  int draw_count = 0;
+  for (int i = 0; i < t->entity_count; i++) {
+    t->draw_list[draw_count++] = &t->entities[i];
+  }
+  t->draw_list[draw_count++] = &t->player;
+
+  qsort(t->draw_list, draw_count, sizeof(Entity *),
+        compare_entities_for_draw_order);
+
+  BeginDrawing();
+  ClearBackground(ORANGE);
+  BeginMode2D(t->camera);
+
+  int tile_y = floorf(t->player.pos.y);
+  Rectangle tile = get_tile_source_rect(tilesheet, 36);
+
+  // --- Draw world ---
+  // (NOTE) figure out how to start from 0 instead of a negative number
+  for (int y = tile_y - 30; y < tile_y + 14; y++) {
+    // Left side
+    for (int x = -21; x < -5; x++) {
+      Vector2 screen = isometric_projection((Vector3){x, y, 0});
+      DrawTextureRec(p->tilesheet, tile, screen, WHITE);
+    }
+
+    // Play area
+    for (int x = -5; x < 8; x++) {
+      Vector2 screen = isometric_projection((Vector3){x, y, 0});
+      Rectangle floor_tile = get_tile_source_rect(tilesheet, 9);
+      DrawTextureRec(p->tilesheet, floor_tile, screen, WHITE);
+    }
+
+    // Right side
+    for (int x = 8; x < 22; x++) {
+      Vector2 screen = isometric_projection((Vector3){x, y, 0});
+      DrawTextureRec(p->tilesheet, tile, screen, WHITE);
+    }
+  }
+
+  // --- Draw Entities ---
+  for (int i = 0; i < draw_count; i++) {
+    Entity *entity = t->draw_list[i];
+    // Cull entities the player can't see
+    if (entity->pos.y < t->player.pos.y - 40 ||
+        entity->pos.y > t->player.pos.y + 20) {
+      continue;
+    }
+
+    Vector2 projected =
+        isometric_projection((Vector3){entity->pos.x, entity->pos.y, 0});
+    switch (entity->type) {
+    case ENTITY_PLAYER: {
+      Vector3 cube_center = {t->player.pos.x + t->player.width / 2.0f,
+                             t->player.pos.y + t->player.height / 2.0f, 0};
+      draw_iso_cube(cube_center, t->player.width, t->player.height, 10.5f,
+                    t->player.angle, t->player.color);
+    } break;
+
+    case ENTITY_HAZARD: {
+      Rectangle src = get_tile_source_rect(tilesheet, 55);
+      Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
+      Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
+      DrawTexturePro(p->tilesheet, src, dst, origin, 0, entity->color);
+    } break;
+
+    case ENTITY_BULLET: {
+      DrawRectangle(projected.x, projected.y, entity->width * 32,
+                    entity->height * 16, entity->color);
+    } break;
+
+    default:
+      break;
+    }
+
+    if (p->debug_on && entity->type != ENTITY_BULLET) {
+      // Draw Collision Debug Iso Box
+      draw_entity_collision_box(entity);
+      DrawPlayerDebug(&t->player);
+    }
+  }
+
+  EndMode2D();
+
+  // Draw player health
+  for (int i = 0; i < t->player.max_health; i++) {
+    DrawRectangle((i * 35), 30, 25, 25,
+                  i < t->player.current_health ? RED : GRAY);
+  }
+
+  // Scale game to window size
+  float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
+  float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
+  t->camera.zoom = fminf(scale_x, scale_y);
+
+  float scale = fminf(scale_x, scale_y);
+  int font_size = (int)(40 * scale);
+  const char *timer_text = TextFormat("%.1f", t->game_timer);
+  int text_width = MeasureText(timer_text, font_size);
+  DrawText(timer_text, (GetScreenWidth() - text_width) / 2, 0, font_size,
+           WHITE);
+  DrawFPS(0, 0);
+  EndDrawing();
+}
+
+void game_update_and_render(Memory *memory) {
+  update(memory);
   render(memory);
 }
