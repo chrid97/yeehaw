@@ -31,7 +31,7 @@ void load_assets(PermanentStorage *p) {
   // Load Music
   p->bg_music = LoadMusicStream("assets/spagetti-western.ogg");
   SetMusicVolume(p->bg_music, 0.05f);
-  PlayMusicStream(p->bg_music);
+  // PlayMusicStream(p->bg_music);
 
   // Load SFX
   p->hit_sound = LoadSound("assets/sfx_sounds_impact12.wav");

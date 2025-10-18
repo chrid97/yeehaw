@@ -64,7 +64,7 @@ void load_map(TransientStorage *t, const char *path) {
 // --------------------------------------------------
 // Game Initialization (resets transient state only)
 // --------------------------------------------------
-void init_game(TransientStorage *t) {
+void init_game(TransientStorage *t, PermanentStorage *p) {
   *t = (TransientStorage){0};
 
   // Initialize entities off screen
@@ -83,6 +83,7 @@ void init_game(TransientStorage *t) {
 
   t->camera.zoom = 1.0f;
 
+  PlayMusicStream(p->bg_music);
   load_map(t, "assets/map.txt");
 }
 
@@ -114,7 +115,6 @@ void update_entities(Memory *memory, float turn_input, float dt) {
       (turn_input < 0 && t->player.vel.x > 0)) {
     t->player.vel.x *= 0.75f;
   }
-
   t->player.pos.x += t->player.vel.x * dt;
 
   t->player.color = WHITE;
@@ -181,11 +181,11 @@ void update(Memory *memory) {
     p->debug_on = !p->debug_on;
   }
   if (IsKeyPressed(KEY_R)) {
-    init_game(t);
+    init_game(t, p);
   }
 
   if (!t->game_initialized) {
-    init_game(t);
+    init_game(t, p);
     t->game_initialized = true;
   }
   float turn_input = 0;
@@ -200,6 +200,7 @@ void update(Memory *memory) {
 
   // Reset on death
   if (t->player.current_health <= 0) {
+    StopMusicStream(p->bg_music);
     // init_game(t);
     return;
   }
