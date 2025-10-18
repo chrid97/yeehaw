@@ -1,4 +1,4 @@
-#include "main.h" // your own shared types
+#include "game.h" // your own shared types
 #include "platform.h"
 #include "raylib.h"
 #include <math.h>

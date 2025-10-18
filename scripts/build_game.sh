@@ -10,14 +10,14 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   #  it'll exist at runtime
   #  -undefined dynamic_lookup
   clang -g -Wall -Wextra -dynamiclib -fPIC \
-    src/main.c \
+    src/game.c \
     -I./lib/raylib/src/ \
     -undefined dynamic_lookup \
     -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo -framework OpenGL \
     -o ./build/game.dylib
 else
   # gcc was trying to read the file before it was done writting, so I create a tmp file and move it once its done writing
-  gcc ./src/main.c -g -fPIC -shared \
+  gcc ./src/game.c -g -fPIC -shared \
     -I./lib/raylib/src \
     -o ./build/game.so.tmp && mv ./build/game.so.tmp ./build/game.so
 fi

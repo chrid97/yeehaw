@@ -14,7 +14,6 @@ GAME_PID=$!
 watchexec -r -e c,h -- bash scripts/build_game.sh &
 WATCH_PID=$!
 
-echo $GAME_PID
 cleanup() {
   if [[ "${CLEANED_UP:-false}" == true ]]; then
     return
@@ -30,5 +29,19 @@ cleanup() {
 
 trap cleanup EXIT INT
 
-wait -n "$GAME_PID" "$WATCH_PID"
+if wait -n 2>/dev/null; then
+  wait -n "$GAME_PID" "$WATCH_PID"
+else
+  # macOS fallback
+  while true; do
+    if ! kill -0 "$GAME_PID" 2>/dev/null; then
+      break
+    fi
+    if ! kill -0 "$WATCH_PID" 2>/dev/null; then
+      break
+    fi
+    sleep 0.5
+  done
+fi
+
 cleanup
