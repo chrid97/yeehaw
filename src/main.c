@@ -1,3 +1,5 @@
+// (TODO) Move to units for time and world pos
+// (TODO) Make input state machine
 // (TODO) auto generate compile_commands.json
 //
 // (MAYBE) in hades you can get extra lives, maybe you can do the same thing
@@ -5,7 +7,6 @@
 // This way you can play through the game on easy mode if you want but if youre
 // chasing a higher score you have an incentive to play with fewer lives
 // (TODO) Fix drawing background/world
-// (TODO) Make input state machine
 // (TODO) Squish player on damage
 // (TODO) Implement shadows
 #include "main.h"
@@ -83,7 +84,78 @@ void init_game(TransientStorage *t) {
   t->camera.zoom = 1.0f;
 
   load_map(t, "assets/map.txt");
-  t->game_initialized = true;
+}
+
+void update_entities(Memory *memory, float turn_input, float dt) {
+  PermanentStorage *p = &memory->permanent;
+  TransientStorage *t = &memory->transient;
+
+  // --- Player Movement ---
+  float turn_speed = 540.0f;
+  float turn_drag = 50.0f;
+  float target_angle = 45.0f * turn_input;
+  float angle_accel = (target_angle - t->player.angle) * turn_speed;
+  t->player.angle_vel += angle_accel * dt;
+  t->player.angle_vel -= t->player.angle_vel * turn_drag * dt;
+  t->player.angle += t->player.angle_vel * dt;
+  Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
+                     sinf((t->player.angle - 90.0f) * DEG2RAD)};
+  float forward_speed = 10.0f;
+  t->player.pos.y -= forward_speed * dt;
+  float accel_strength = 250.0f;
+  float drag = 25.0f;
+
+  Vector2 accel = {forward.x * accel_strength, 0};
+  t->player.vel.x += accel.x * dt;
+  t->player.vel.x -= t->player.vel.x * drag * dt;
+
+  // direction-flip damping
+  if ((turn_input > 0 && t->player.vel.x < 0) ||
+      (turn_input < 0 && t->player.vel.x > 0)) {
+    t->player.vel.x *= 0.75f;
+  }
+
+  t->player.pos.x += t->player.vel.x * dt;
+
+  t->player.color = WHITE;
+  t->game_timer += dt;
+  // (TODO)clamp find a better way to reuse these tile values
+  t->player.pos.x =
+      Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
+
+  // Player-entity collision
+  Rectangle player_rect = {t->player.pos.x, t->player.pos.y, t->player.width,
+                           t->player.height};
+  for (int i = 0; i < t->entity_count; i++) {
+    Entity *entity = &t->entities[i];
+    Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
+                             entity->height};
+    if (CheckCollisionRecs(player_rect, harard_rect) &&
+        t->player.damage_cooldown <= 0) {
+      PlaySound(p->hit_sound);
+      t->player.current_health--;
+      t->player.damage_cooldown = 0.5f;
+      t->shake_timer = 0.5f;
+    }
+
+    if (entity->type == ENTITY_BULLET) {
+      entity->pos.y -= 25.0f * dt; // adjust 10.0f to tune speed
+    }
+  }
+
+  // --- Timers ---
+  if (t->player.damage_cooldown > 0.0f) {
+    t->player.damage_cooldown -= dt;
+    t->player.color = RED;
+  }
+
+  // Screen shake
+  if (t->shake_timer > 0) {
+    t->shake_timer -= dt;
+    float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+    float shake_magnitude = 10.0f;
+    t->camera.target.x += offset_x * shake_magnitude;
+  }
 }
 
 // --------------------------------------------------
@@ -114,6 +186,14 @@ void update(Memory *memory) {
 
   if (!t->game_initialized) {
     init_game(t);
+    t->game_initialized = true;
+  }
+  float turn_input = 0;
+  if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
+    turn_input = -1.0f;
+  }
+  if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
+    turn_input = 1.0f;
   }
 
   UpdateMusicStream(p->bg_music);
@@ -124,106 +204,21 @@ void update(Memory *memory) {
     return;
   }
 
-  float frame_dt = GetFrameTime();
-  t->accumulator += frame_dt;
+  float dt = GetFrameTime();
+  t->accumulator += dt;
   int steps = 0;
-  const int MAX_STEPS = 8; // safety cap
+  const int MAX_STEPS = 8;
   while (t->accumulator >= FIXED_DT && steps < MAX_STEPS) {
-    float dt = FIXED_DT;
-    float turn_input = 0;
-    if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
-      turn_input = -1.0f;
-    }
-    if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
-      turn_input = 1.0f;
-    }
-
-    // --- Player Movement ---
-    // --- Turning / banking ---
-    float turn_speed = 540.0f; // how fast angle responds
-    float turn_drag = 50.0f;   // how quickly rotation stops leaning
-    float target_angle = 45.0f * turn_input;
-    float angle_accel = (target_angle - t->player.angle) * turn_speed;
-    t->player.angle_vel += angle_accel * dt;
-    t->player.angle_vel -= t->player.angle_vel * turn_drag * dt;
-    t->player.angle += t->player.angle_vel * dt;
-
-    // --- Movement ---
-    Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
-                       sinf((t->player.angle - 90.0f) * DEG2RAD)};
-
-    // Forward motion (always galloping)
-    float forward_speed = 10.0f;
-    t->player.pos.y -= forward_speed * dt;
-
-    // Lateral motion (guiding left/right)
-    float accel_strength = 250.0f; // low acceleration = gentle pull on reins
-    float drag = 25.0f;            // high drag = instant correction after input
-
-    Vector2 accel = {forward.x * accel_strength, 0}; // only lateral accel
-    t->player.vel.x += accel.x * dt;
-    t->player.vel.x -= t->player.vel.x * drag * dt;
-
-    // direction-flip damping
-    if ((turn_input > 0 && t->player.vel.x < 0) ||
-        (turn_input < 0 && t->player.vel.x > 0)) {
-      t->player.vel.x *= 0.75f; // tiny resistance when switching
-    }
-
-    t->player.pos.x += t->player.vel.x * dt;
-
-    // --- Update ---
-    t->player.color = WHITE;
-    t->game_timer += dt;
-    // (TODO)clamp find a better way to reuse these tile values
-    t->player.pos.x = Clamp(t->player.pos.x, -5 + t->player.width * 2.0f,
-                            8 + t->player.width);
-    Vector2 player_screen =
-        isometric_projection((Vector3){0, t->player.pos.y, 0});
-
-    // Update camera position to follow player
-    t->camera.target = player_screen;
-    t->camera.offset =
-        (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
-
-    // Player-entity collision
-    Rectangle player_rect = {t->player.pos.x, t->player.pos.y, t->player.width,
-                             t->player.height};
-    for (int i = 0; i < t->entity_count; i++) {
-      Entity *entity = &t->entities[i];
-      Rectangle harard_rect = {entity->pos.x, entity->pos.y, entity->width,
-                               entity->height};
-      if (CheckCollisionRecs(player_rect, harard_rect) &&
-          t->player.damage_cooldown <= 0) {
-        // PlaySound(p->hit_sound);
-        t->player.current_health--;
-        t->player.damage_cooldown = 0.5f;
-        t->shake_timer = 0.5f;
-
-        DrawRectangleLines(player_rect.x, player_rect.y, player_rect.width,
-                           player_rect.height, BLACK);
-      }
-
-      if (entity->type == ENTITY_BULLET) {
-        entity->pos.y -= 25.0f * dt; // adjust 10.0f to tune speed
-      }
-    }
-
-    if (t->player.damage_cooldown > 0.0f) {
-      t->player.damage_cooldown -= dt;
-      t->player.color = RED;
-    }
-
-    // Screen shake
-    if (t->shake_timer > 0) {
-      t->shake_timer -= dt;
-      float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
-      float shake_magnitude = 10.0f;
-      t->camera.target.x += offset_x * shake_magnitude;
-    }
+    update_entities(memory, turn_input, FIXED_DT);
     steps++;
     t->accumulator -= FIXED_DT;
   }
+
+  Vector2 player_screen =
+      isometric_projection((Vector3){0, t->player.pos.y, 0});
+  t->camera.target = player_screen;
+  t->camera.offset =
+      (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 }
 
 // --------------------------------------------------
@@ -313,6 +308,8 @@ void render(Memory *gs) {
       // Draw Collision Debug Iso Box
       draw_entity_collision_box(entity);
       DrawPlayerDebug(&t->player);
+      DrawRectangleLines(entity->pos.x, entity->pos.y, entity->width,
+                         entity->height, BLACK);
     }
   }
 
