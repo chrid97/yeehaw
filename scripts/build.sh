@@ -14,7 +14,7 @@ fi
 if [[ "$OSTYPE" == "darwin"* ]]; then
   echo "🍎 Building for macOS..."
 
-  clang -g -Wall -Wextra \
+  clang -g -Wall -Wextra -Wmissing-field-initializers -Wuninitialized \
     src/platform.c \
     -I./lib/raylib/src/ \
     ./lib/raylib/src/libraylib.a \

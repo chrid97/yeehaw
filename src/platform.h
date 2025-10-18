@@ -21,11 +21,13 @@ typedef enum {
   ENTITY_NONE = 0,
   ENTITY_HAZARD,
   ENTITY_PLAYER,
-  ENTITY_BULLET,
+  ENTITY_PROJECTILE,
+  ENTITY_GUNMEN,
 } EntityType;
 
 typedef struct {
   EntityType type;
+  bool is_active;
 
   float height;
   float width;
@@ -39,6 +41,7 @@ typedef struct {
   int max_health;
 
   float damage_cooldown;
+  float weapon_cooldown;
   Color color;
 } Entity;
 
