@@ -2,6 +2,7 @@
 // (TODO) Move to units for time and world pos
 // (TODO) Make input state machine
 // (TODO) auto generate compile_commands.json
+// (MAYBE) bullet on bullet ritochet?
 //
 // (MAYBE) in hades you can get extra lives, maybe you can do the same thing
 // here but playign with fewer lives gives you some bonus. Myabe a score bonus?
@@ -153,18 +154,22 @@ void update_entities(Memory *memory, float dt) {
     case ENTITY_GUNMEN: {
       if (entity->weapon_cooldown <= 0) {
         entity->weapon_cooldown = 2.5f;
-        Entity *bullet =
-            entity_spawn(t, entity->pos.x, entity->pos.y, ENTITY_PROJECTILE);
+        Entity *bullet = entity_spawn(t, entity->pos.x - 0.5f, entity->pos.y,
+                                      ENTITY_PROJECTILE);
+        Vector2 player_pos = Vector2Subtract(t->player.pos, entity->pos);
+        Vector2 direction = Vector2Normalize(player_pos);
+
+        bullet->vel = Vector2Scale(direction, 25);
         bullet->color = RED;
         bullet->width = 0.2;
         bullet->height = 0.2;
-
-        Vector2 player_pos = Vector2Subtract(t->player.pos, entity->pos);
-        Vector2 direction = Vector2Normalize(player_pos);
-        bullet->vel = Vector2Scale(direction, 25);
       }
     } break;
 
+    case ENTITY_PROJECTILE: {
+      entity->pos.y += entity->vel.y * dt;
+      entity->pos.x += entity->vel.x * dt;
+    } break;
     default:
       break;
     }
@@ -176,11 +181,6 @@ void update_entities(Memory *memory, float dt) {
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
 
-    if (entity->type == ENTITY_PROJECTILE) {
-      entity->pos.y += entity->vel.y * dt;
-      entity->pos.x += entity->vel.x * dt;
-    }
-
     Rectangle entity_rect = {entity->pos.x, entity->pos.y, entity->width,
                              entity->height};
     if (CheckCollisionRecs(player_rect, entity_rect) &&
@@ -189,10 +189,40 @@ void update_entities(Memory *memory, float dt) {
       t->player.current_health--;
       t->player.damage_cooldown = 0.5f;
       t->shake_timer = 0.5f;
+
+      if (entity->type == ENTITY_PROJECTILE) {
+        entity->type = ENTITY_NONE;
+        entity->is_active = false;
+      }
     }
 
     if (entity->weapon_cooldown > 0) {
       entity->weapon_cooldown -= dt;
+    }
+  }
+
+  // Entity-entity collision
+  for (int i = 0; i < t->entity_count; i++) {
+    Entity *a = &t->entities[i];
+    if (a->type == ENTITY_NONE) {
+      continue;
+    }
+
+    Rectangle a_rect = {a->pos.x, a->pos.y, a->width, a->height};
+    for (int j = i + 1; j < t->entity_count; j++) {
+      Entity *b = &t->entities[j];
+      if (b->type == ENTITY_NONE) {
+        continue;
+      }
+
+      Rectangle b_rect = {b->pos.x, b->pos.y, b->width, b->height};
+
+      if (CheckCollisionRecs(a_rect, b_rect)) {
+        a->type = ENTITY_NONE;
+        a->is_active = false;
+        b->type = ENTITY_NONE;
+        b->is_active = false;
+      }
     }
   }
 }
