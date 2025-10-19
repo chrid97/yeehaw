@@ -154,6 +154,11 @@ void update_entities(Memory *memory, float dt) {
     if (entity->weapon_cooldown > 0) {
       entity->weapon_cooldown -= dt;
     }
+
+    if (entity->pos.y > t->player.pos.y + 8) {
+      entity->type = ENTITY_NONE;
+    }
+
     switch (entity->type) {
     case ENTITY_GUNMEN: {
       if (entity->weapon_cooldown <= 0) {
