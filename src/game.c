@@ -150,19 +150,33 @@ void update_entities(Memory *memory, float dt) {
 
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
+
+    if (entity->weapon_cooldown > 0) {
+      entity->weapon_cooldown -= dt;
+    }
     switch (entity->type) {
     case ENTITY_GUNMEN: {
       if (entity->weapon_cooldown <= 0) {
-        entity->weapon_cooldown = 2.5f;
-        Entity *bullet = entity_spawn(t, entity->pos.x - 0.5f, entity->pos.y,
-                                      ENTITY_PROJECTILE);
-        Vector2 player_pos = Vector2Subtract(t->player.pos, entity->pos);
-        Vector2 direction = Vector2Normalize(player_pos);
+        Vector2 entity_center = {
+            entity->pos.x + entity->width * 0.5f,
+            entity->pos.y + entity->height * 0.5f,
+        };
+        Vector2 player_center = {
+            t->player.pos.x + t->player.width * 0.5f,
+            t->player.pos.y + t->player.height * 0.5f,
+        };
+
+        Vector2 direction =
+            Vector2Normalize(Vector2Subtract(player_center, entity_center));
+        Vector2 spawn_pos = Vector2Add(direction, entity_center);
+        Entity *bullet =
+            entity_spawn(t, spawn_pos.x, spawn_pos.y, ENTITY_PROJECTILE);
 
         bullet->vel = Vector2Scale(direction, 25);
         bullet->color = RED;
         bullet->width = 0.2;
         bullet->height = 0.2;
+        entity->weapon_cooldown = 2.5f;
       }
     } break;
 
@@ -192,12 +206,7 @@ void update_entities(Memory *memory, float dt) {
 
       if (entity->type == ENTITY_PROJECTILE) {
         entity->type = ENTITY_NONE;
-        entity->is_active = false;
       }
-    }
-
-    if (entity->weapon_cooldown > 0) {
-      entity->weapon_cooldown -= dt;
     }
   }
 
@@ -216,13 +225,32 @@ void update_entities(Memory *memory, float dt) {
       }
 
       Rectangle b_rect = {b->pos.x, b->pos.y, b->width, b->height};
-
       if (CheckCollisionRecs(a_rect, b_rect)) {
         a->type = ENTITY_NONE;
-        a->is_active = false;
         b->type = ENTITY_NONE;
-        b->is_active = false;
       }
+    }
+  }
+
+  // Clean up entities
+  for (int i = 0; i < t->entity_count; i++) {
+    Entity *entity = &t->entities[i];
+    if (entity->type == ENTITY_NONE) {
+      *entity = (Entity){
+          .pos = {MAXFLOAT, MAXFLOAT},
+          .vel = {0, 0},
+          .width = 1,
+          .height = 1,
+          .type = ENTITY_NONE,
+          .color = WHITE,
+          .angle = 0,
+          .angle_vel = 0,
+          .bank_angle = 0,
+          .current_health = 0,
+          .damage_cooldown = 0,
+
+      };
+      t->entity_count--;
     }
   }
 }
