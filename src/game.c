@@ -237,27 +237,14 @@ void update_entities(Memory *memory, float dt) {
     }
   }
 
-  // Clean up entities
+  // Clean up/Compact entities
+  int new_count = 0;
   for (int i = 0; i < t->entity_count; i++) {
-    Entity *entity = &t->entities[i];
-    if (entity->type == ENTITY_NONE) {
-      *entity = (Entity){
-          .pos = {MAXFLOAT, MAXFLOAT},
-          .vel = {0, 0},
-          .width = 1,
-          .height = 1,
-          .type = ENTITY_NONE,
-          .color = WHITE,
-          .angle = 0,
-          .angle_vel = 0,
-          .bank_angle = 0,
-          .current_health = 0,
-          .damage_cooldown = 0,
-
-      };
-      t->entity_count--;
+    if (t->entities[i].type != ENTITY_NONE) {
+      t->entities[new_count++] = t->entities[i];
     }
   }
+  t->entity_count = new_count;
 }
 
 // --------------------------------------------------
