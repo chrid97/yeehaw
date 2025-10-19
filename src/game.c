@@ -1,3 +1,6 @@
+// (TODO) destroy bullets when they fly off the top of the screen
+// (tood) dont perfom collision detection on entiteis off screen
+// todo
 // (TODO) Destroy entities not on screen
 // (TODO) Move to units for time and world pos
 // (TODO) Make input state machine
@@ -65,6 +68,9 @@ void load_map(TransientStorage *t, const char *path) {
       if (c == '^') {
         entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
       }
+      if (c == 'X') {
+        entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_GUNMEN);
+      }
     }
     y -= 0.5f;
   }
@@ -94,8 +100,9 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->camera.zoom = 1.0f;
 
   PlayMusicStream(p->bg_music);
-  // load_map(t, "assets/map.txt");
-  entity_spawn(t, PLAY_AREA_START + 2, -10, ENTITY_GUNMEN);
+  load_map(t, "assets/map.txt");
+  // entity_spawn(t, PLAY_AREA_START + 2, -10, ENTITY_GUNMEN);
+  printf("%i\n", t->entity_count);
 }
 
 void update_player(TransientStorage *t, float turn_input, float dt) {
@@ -111,7 +118,7 @@ void update_player(TransientStorage *t, float turn_input, float dt) {
   t->player.angle += t->player.angle_vel * dt;
   Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
                      sinf((t->player.angle - 90.0f) * DEG2RAD)};
-  float forward_speed = 0.0f;
+  float forward_speed = 5.0f;
   t->player.pos.y -= forward_speed * dt;
   float accel_strength = 250.0f;
   float drag = 25.0f;
