@@ -47,10 +47,17 @@ Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
       .bank_angle = 0,
       .current_health = 0,
       .damage_cooldown = 0,
-
+      .active = false,
   };
 
   return &t->entities[t->entity_count - 1];
+}
+
+bool is_onscreen(Entity *a, Entity *player) {
+  if (a->pos.y < player->pos.y - 20 || a->pos.y > player->pos.y + 20) {
+    return false;
+  }
+  return true;
 }
 
 void load_map(TransientStorage *t, const char *path) {
@@ -68,7 +75,7 @@ void load_map(TransientStorage *t, const char *path) {
       if (c == '^') {
         entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
       }
-      if (c == 'X') {
+      if (c == 'x') {
         entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_GUNMEN);
       }
     }
@@ -87,6 +94,7 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   for (int i = 0; i < MAX_ENTITIES; i++) {
     t->entities[i].pos = (Vector2){9999.0f, 9999.0f};
     t->entities[i].type = ENTITY_NONE;
+    t->entities[i].active = false;
   }
 
   // Initialize player
@@ -101,8 +109,6 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
 
   PlayMusicStream(p->bg_music);
   load_map(t, "assets/map.txt");
-  // entity_spawn(t, PLAY_AREA_START + 2, -10, ENTITY_GUNMEN);
-  printf("%i\n", t->entity_count);
 }
 
 void update_player(TransientStorage *t, float turn_input, float dt) {
@@ -118,7 +124,7 @@ void update_player(TransientStorage *t, float turn_input, float dt) {
   t->player.angle += t->player.angle_vel * dt;
   Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
                      sinf((t->player.angle - 90.0f) * DEG2RAD)};
-  float forward_speed = 5.0f;
+  float forward_speed = 10.0f;
   t->player.pos.y -= forward_speed * dt;
   float accel_strength = 250.0f;
   float drag = 25.0f;
@@ -158,11 +164,23 @@ void update_entities(Memory *memory, float dt) {
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
 
+    if (is_onscreen(entity, &t->player)) {
+      entity->active = true;
+    }
+
+    // skip all updates on inactive entities
+    if (!entity->active) {
+      continue;
+    }
+
     if (entity->weapon_cooldown > 0) {
       entity->weapon_cooldown -= dt;
     }
 
-    if (entity->pos.y > t->player.pos.y + 8) {
+    // (NOTE) maybe I don't have to mark offscreen entities for destruction it's
+    // not like i'm replacing them, i dont plan for this to be an infinite
+    // runner anymore. Oh but I do want to mark bullets for destruction
+    if (entity->pos.y > t->player.pos.y + 25) {
       entity->type = ENTITY_NONE;
     }
 
@@ -225,14 +243,26 @@ void update_entities(Memory *memory, float dt) {
   // Entity-entity collision
   for (int i = 0; i < t->entity_count; i++) {
     Entity *a = &t->entities[i];
-    if (a->type == ENTITY_NONE) {
+    // skip all updates on inactive entities
+    if (!a->active) {
       continue;
     }
 
+    if (a->type == ENTITY_NONE || !a->active) {
+      continue;
+    }
+
+    if (a->pos.y < t->player.pos.y - 40 || a->pos.y > t->player.pos.y + 20) {
+      continue;
+    }
     Rectangle a_rect = {a->pos.x, a->pos.y, a->width, a->height};
     for (int j = i + 1; j < t->entity_count; j++) {
       Entity *b = &t->entities[j];
-      if (b->type == ENTITY_NONE) {
+
+      if (b->type == ENTITY_NONE || !b->active) {
+        continue;
+      }
+      if (b->pos.y < t->player.pos.y - 40 || b->pos.y > t->player.pos.y + 20) {
         continue;
       }
 
@@ -402,7 +432,6 @@ void render(Memory *gs) {
     } break;
 
     case ENTITY_PROJECTILE: {
-      // printf("drawing bullet");
       DrawRectangle(projected.x, projected.y, entity->width * 32,
                     entity->height * 16, entity->color);
     } break;

@@ -27,7 +27,7 @@ typedef enum {
 
 typedef struct {
   EntityType type;
-  // if an entity type is none it should be inactive
+  bool active;
 
   float height;
   float width;
