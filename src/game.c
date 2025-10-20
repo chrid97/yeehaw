@@ -29,9 +29,63 @@
 #include <emscripten/emscripten.h>
 #endif
 
+Color col_dark_gray = {0x21, 0x25, 0x29, 255};  // #212529
+Color col_mauve = {0x61, 0x47, 0x50, 255};      // #614750
+Color col_warm_brown = {0x8C, 0x5C, 0x47, 255}; // #8c5c47
+Color col_tan = {0xB4, 0x7D, 0x58, 255};        // #b47d58
+Color col_sand = {0xD9, 0xB7, 0x7E, 255};       // #d9b77e
+Color col_cream = {0xEA, 0xD9, 0xA7, 255};      // #ead9a7
+
 // Game boundaries
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
+
+// (TODO) cleanup game summary ui code
+typedef struct {
+  Rectangle rect;
+  int number_rows;
+  float padding_x;
+  float gap_y;
+  float header_y_end;
+  int font_size;
+  float scale;
+} PostGameSummary;
+
+void draw_post_game_summary_header(PostGameSummary *summary, float scale) {
+  Rectangle rect = summary->rect;
+  DrawRectangle(rect.x * scale, rect.y * scale, rect.width * scale,
+                rect.height * scale, col_cream);
+
+  float center_x = rect.x + (rect.width / 2.0f);
+  const char *title = "LEVEL COMPLETE";
+  int title_width = MeasureText(title, summary->font_size);
+  DrawText(title, (center_x - (title_width / 2.0f)) * scale,
+           (rect.y + summary->gap_y) * scale, summary->font_size * scale,
+           BLACK);
+
+  float header_y_end = summary->header_y_end;
+  DrawLine(rect.x * scale, header_y_end * scale, (rect.x + rect.width) * scale,
+           header_y_end * scale, BLACK);
+}
+
+void draw_score_breakdown(PostGameSummary *summary, const char *text,
+                          const char *points_text) {
+  float x = summary->rect.x;
+  float y = summary->rect.y;
+  float width = summary->rect.width;
+  int font_size = summary->font_size;
+  float scale = summary->scale;
+
+  summary->number_rows++;
+  y = summary->header_y_end + (summary->gap_y * summary->number_rows);
+
+  DrawText(text, (x + summary->padding_x) * scale, y * scale, 10 * scale,
+           BLACK);
+
+  int points_width = MeasureText(points_text, font_size);
+  DrawText(points_text, (x + width - points_width - summary->padding_x) * scale,
+           y * scale, font_size * scale, BLACK);
+}
 
 Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
   assert(t->entity_count < MAX_ENTITIES && "Entity overflow!");
@@ -77,6 +131,9 @@ void load_map(TransientStorage *t, const char *path) {
       }
       if (c == 'x') {
         entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_GUNMEN);
+      }
+      if (c == '1') {
+        t->map_end = (Vector2){0, y};
       }
     }
     y -= 0.5f;
@@ -206,10 +263,10 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
                              entity->height};
     if (CheckCollisionRecs(player_rect, entity_rect) &&
         t->player.damage_cooldown <= 0) {
-      PlaySound(p->hit_sound);
-      t->player.current_health--;
-      t->player.damage_cooldown = 0.5f;
-      t->shake_timer = 0.5f;
+      // PlaySound(p->hit_sound);
+      // t->player.current_health--;
+      // t->player.damage_cooldown = 0.5f;
+      // t->shake_timer = 0.5f;
 
       if (entity->type == ENTITY_PROJECTILE) {
         entity->type = ENTITY_NONE;
@@ -236,15 +293,9 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
     for (int j = i + 1; j < t->entity_count; j++) {
       Entity *b = &t->entities[j];
 
-      if (b->type == ENTITY_NONE || !b->active) {
-        continue;
-      }
-      if (b->pos.y < t->player.pos.y - 40 || b->pos.y > t->player.pos.y + 20) {
-        continue;
-      }
-
       Rectangle b_rect = {b->pos.x, b->pos.y, b->width, b->height};
-      if (CheckCollisionRecs(a_rect, b_rect)) {
+      if (a->type != ENTITY_HAZARD && CheckCollisionRecs(a_rect, b_rect)) {
+        t->enemies_killed++;
         a->type = ENTITY_NONE;
         b->type = ENTITY_NONE;
       }
@@ -370,6 +421,10 @@ void update(Memory *memory) {
   int steps = 0;
   const int MAX_STEPS = 8;
   while (t->accumulator >= FIXED_DT && steps < MAX_STEPS) {
+    if (t->player.pos.y <= t->map_end.y) {
+      return;
+    }
+
     update_timers(t);
     update_player(t, turn_input);
     update_entities(memory);
@@ -501,8 +556,8 @@ void render(Memory *gs) {
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
   t->camera.zoom = fminf(scale_x, scale_y);
-
   float scale = fminf(scale_x, scale_y);
+
   int font_size = (int)(40 * scale);
   const char *timer_text = TextFormat("%.1f", t->game_timer);
   int text_width = MeasureText(timer_text, font_size);
@@ -525,6 +580,54 @@ void render(Memory *gs) {
     DrawText(restart_text, (GetScreenWidth() - restart_width) / 2.0f,
              (GetScreenHeight()) / 2.0f + 10, restart_font_size, RED);
   }
+
+  // (TODO) clean this junk up
+  if (t->player.pos.y <= t->map_end.y) {
+    Rectangle summary = {0};
+    summary.width = 250;
+    summary.height = 300;
+    summary.x = (VIRTUAL_WIDTH / 2.0f) - summary.width / 2.0f;
+    summary.y = (VIRTUAL_HEIGHT / 2.0f) - summary.height / 2.0f;
+    PostGameSummary game_summary = {0};
+    game_summary.rect = summary;
+    game_summary.gap_y = 10.0f;
+    game_summary.padding_x = 10.0f;
+    game_summary.font_size = 10;
+    game_summary.header_y_end = 30 + summary.y;
+    game_summary.scale = scale;
+
+    int enemies_killed_points = 100 * t->enemies_killed;
+    int current_health_bonus = 50 * t->player.current_health;
+    int completion_timer_bonus = 25 * t->game_timer;
+    int score = enemies_killed_points + current_health_bonus;
+
+    draw_post_game_summary_header(&game_summary, scale);
+    draw_score_breakdown(&game_summary, "TIME SURVIVED",
+                         TextFormat("%.2f", t->game_timer));
+    draw_score_breakdown(&game_summary, "REMAINING HEALTH",
+                         TextFormat("%i", current_health_bonus));
+    draw_score_breakdown(&game_summary, "ENEMIES KILLED",
+                         TextFormat("%i", enemies_killed_points));
+
+    // (TODO fix later)
+    game_summary.gap_y += 20;
+    draw_score_breakdown(&game_summary, "FINAL SCORE", TextFormat("%i", score));
+    draw_score_breakdown(&game_summary, "RANK", "C");
+  }
+
+  // --------------------------------
+  //          MISSION COMPLETE
+  // --------------------------------
+  // TIME SURVIVED ............  1500
+  // ENEMIES DESTROYED ........  2600
+  // ACCURACY BONUS ...........   800
+  // COMBO MULTIPLIER .........  ×3.5
+  // --------------------------------
+  // FINAL SCORE ..............  4900
+  // RANK .....................  S
+  // --------------------------------
+  // PRESS R TO RESTART
+
   DrawFPS(0, 0);
   EndDrawing();
 }

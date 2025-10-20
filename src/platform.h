@@ -62,6 +62,16 @@ typedef struct {
 
   double accumulator;
   bool game_initialized;
+
+  // scoring stuff
+  int enemies_killed;
+  // I don't know if this one makes sense since the map is always the same size
+  // so if you complete the level it should always be the same
+  float distance_traveled;
+  // int obstacles_destroyed;
+  int score;
+  // map stuff
+  Vector2 map_end;
 } TransientStorage;
 
 // -------------------------------------
