@@ -111,7 +111,58 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   load_map(t, "assets/map.txt");
 }
 
-void update_player(TransientStorage *t, float turn_input, float dt) {
+void compact_entities(TransientStorage *t) {
+  int new_count = 0;
+  for (int i = 0; i < t->entity_count; i++) {
+    if (t->entities[i].type != ENTITY_NONE) {
+      t->entities[new_count++] = t->entities[i];
+    }
+  }
+  t->entity_count = new_count;
+}
+
+void update_timers(TransientStorage *t) {
+  t->game_timer += FIXED_DT;
+  if (t->player.damage_cooldown > 0.0f) {
+    t->player.damage_cooldown -= FIXED_DT;
+    t->player.color = RED;
+  }
+
+  // (TODO) shaking stopped working at some point gotta fix
+  if (t->shake_timer > 0) {
+    t->shake_timer -= FIXED_DT;
+    float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+    float shake_magnitude = 10.0f;
+    t->camera.target.x += offset_x * shake_magnitude;
+  }
+
+  for (int i = 0; i < t->entity_count; i++) {
+    Entity *entity = &t->entities[i];
+    if (entity->weapon_cooldown > 0) {
+      entity->weapon_cooldown -= FIXED_DT;
+    }
+  }
+}
+
+void update_entity_movement(TransientStorage *t) {
+  for (int i = 0; i < t->entity_count; i++) {
+    Entity *entity = &t->entities[i];
+    switch (entity->type) {
+    case ENTITY_GUNMEN: {
+    } break;
+
+    case ENTITY_PROJECTILE: {
+      entity->pos.y += entity->vel.y * FIXED_DT;
+      entity->pos.x += entity->vel.x * FIXED_DT;
+    } break;
+    default:
+      break;
+    }
+  }
+}
+
+void update_player(TransientStorage *t, float turn_input) {
+  float dt = FIXED_DT;
   // reset players color if damaged
   t->player.color = WHITE;
   // --- Player Movement ---
@@ -144,81 +195,7 @@ void update_player(TransientStorage *t, float turn_input, float dt) {
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
 }
 
-void update_entities(Memory *memory, float dt) {
-  PermanentStorage *p = &memory->permanent;
-  TransientStorage *t = &memory->transient;
-
-  // --- Timers ---
-  t->game_timer += dt;
-  if (t->player.damage_cooldown > 0.0f) {
-    t->player.damage_cooldown -= dt;
-    t->player.color = RED;
-  }
-  if (t->shake_timer > 0) {
-    t->shake_timer -= dt;
-    float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
-    float shake_magnitude = 10.0f;
-    t->camera.target.x += offset_x * shake_magnitude;
-  }
-
-  for (int i = 0; i < t->entity_count; i++) {
-    Entity *entity = &t->entities[i];
-
-    if (is_onscreen(entity, &t->player)) {
-      entity->active = true;
-    }
-
-    // skip all updates on inactive entities
-    if (!entity->active) {
-      continue;
-    }
-
-    if (entity->weapon_cooldown > 0) {
-      entity->weapon_cooldown -= dt;
-    }
-
-    // (NOTE) maybe I don't have to mark offscreen entities for destruction it's
-    // not like i'm replacing them, i dont plan for this to be an infinite
-    // runner anymore. Oh but I do want to mark bullets for destruction
-    if (entity->pos.y > t->player.pos.y + 25) {
-      entity->type = ENTITY_NONE;
-    }
-
-    switch (entity->type) {
-    case ENTITY_GUNMEN: {
-      if (entity->weapon_cooldown <= 0) {
-        Vector2 entity_center = {
-            entity->pos.x + entity->width * 0.5f,
-            entity->pos.y + entity->height * 0.5f,
-        };
-        Vector2 player_center = {
-            t->player.pos.x + t->player.width * 0.5f,
-            t->player.pos.y + t->player.height * 0.5f,
-        };
-
-        Vector2 direction =
-            Vector2Normalize(Vector2Subtract(player_center, entity_center));
-        Vector2 spawn_pos = Vector2Add(direction, entity_center);
-        Entity *bullet =
-            entity_spawn(t, spawn_pos.x, spawn_pos.y, ENTITY_PROJECTILE);
-
-        bullet->vel = Vector2Scale(direction, 25);
-        bullet->color = RED;
-        bullet->width = 0.2;
-        bullet->height = 0.2;
-        entity->weapon_cooldown = 2.5f;
-      }
-    } break;
-
-    case ENTITY_PROJECTILE: {
-      entity->pos.y += entity->vel.y * dt;
-      entity->pos.x += entity->vel.x * dt;
-    } break;
-    default:
-      break;
-    }
-  }
-
+void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
   // Player-entity collision
   Rectangle player_rect = {t->player.pos.x, t->player.pos.y, t->player.width,
                            t->player.height};
@@ -273,15 +250,65 @@ void update_entities(Memory *memory, float dt) {
       }
     }
   }
+}
 
-  // Clean up/Compact entities
-  int new_count = 0;
+void update_entities(Memory *memory) {
+  PermanentStorage *p = &memory->permanent;
+  TransientStorage *t = &memory->transient;
+
   for (int i = 0; i < t->entity_count; i++) {
-    if (t->entities[i].type != ENTITY_NONE) {
-      t->entities[new_count++] = t->entities[i];
+    Entity *entity = &t->entities[i];
+
+    if (is_onscreen(entity, &t->player)) {
+      entity->active = true;
+    }
+
+    // skip all updates on inactive entities
+    if (!entity->active) {
+      continue;
+    }
+
+    if (entity->weapon_cooldown > 0) {
+      entity->weapon_cooldown -= FIXED_DT;
+    }
+
+    // (NOTE) maybe I don't have to mark offscreen entities for destruction it's
+    // not like i'm replacing them, i dont plan for this to be an infinite
+    // runner anymore. Oh but I do want to mark bullets for destruction
+    if (entity->pos.y > t->player.pos.y + 25) {
+      entity->type = ENTITY_NONE;
+    }
+
+    switch (entity->type) {
+    case ENTITY_GUNMEN: {
+      if (entity->weapon_cooldown <= 0) {
+        Vector2 entity_center = {
+            entity->pos.x + entity->width * 0.5f,
+            entity->pos.y + entity->height * 0.5f,
+        };
+        Vector2 player_center = {
+            t->player.pos.x + t->player.width * 0.5f,
+            t->player.pos.y + t->player.height * 0.5f,
+        };
+
+        Vector2 direction =
+            Vector2Normalize(Vector2Subtract(player_center, entity_center));
+        Vector2 spawn_pos = Vector2Add(direction, entity_center);
+        Entity *bullet =
+            entity_spawn(t, spawn_pos.x, spawn_pos.y, ENTITY_PROJECTILE);
+
+        bullet->vel = Vector2Scale(direction, 25);
+        bullet->color = RED;
+        bullet->width = 0.2;
+        bullet->height = 0.2;
+        entity->weapon_cooldown = 2.5f;
+      }
+    } break;
+
+    default:
+      break;
     }
   }
-  t->entity_count = new_count;
 }
 
 // --------------------------------------------------
@@ -343,9 +370,13 @@ void update(Memory *memory) {
   int steps = 0;
   const int MAX_STEPS = 8;
   while (t->accumulator >= FIXED_DT && steps < MAX_STEPS) {
-    update_player(t, turn_input, FIXED_DT);
-    update_entities(memory, FIXED_DT);
-    // collision
+    update_timers(t);
+    update_player(t, turn_input);
+    update_entities(memory);
+    update_entity_movement(t);
+    resolve_collisions(t, p);
+    compact_entities(t);
+
     steps++;
     t->accumulator -= FIXED_DT;
   }
