@@ -161,6 +161,7 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->player.color = WHITE;
   t->player.current_health = 2;
   t->player.max_health = 2;
+  t->player.vel = (Vector2){0, 6.0};
 
   t->camera.zoom = 1.0f;
 
@@ -232,8 +233,7 @@ void update_player(TransientStorage *t, float turn_input) {
   t->player.angle += t->player.angle_vel * dt;
   Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
                      sinf((t->player.angle - 90.0f) * DEG2RAD)};
-  float forward_speed = 10.0f;
-  t->player.pos.y -= forward_speed * dt;
+  t->player.pos.y -= t->player.vel.y * dt;
   float accel_strength = 250.0f;
   float drag = 25.0f;
 
@@ -263,10 +263,10 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
                              entity->height};
     if (CheckCollisionRecs(player_rect, entity_rect) &&
         t->player.damage_cooldown <= 0) {
-      // PlaySound(p->hit_sound);
-      // t->player.current_health--;
-      // t->player.damage_cooldown = 0.5f;
-      // t->shake_timer = 0.5f;
+      PlaySound(p->hit_sound);
+      t->player.current_health--;
+      t->player.damage_cooldown = 0.5f;
+      t->shake_timer = 0.5f;
 
       if (entity->type == ENTITY_PROJECTILE) {
         entity->type = ENTITY_NONE;
@@ -317,10 +317,6 @@ void update_entities(Memory *memory) {
     // skip all updates on inactive entities
     if (!entity->active) {
       continue;
-    }
-
-    if (entity->weapon_cooldown > 0) {
-      entity->weapon_cooldown -= FIXED_DT;
     }
 
     // (NOTE) maybe I don't have to mark offscreen entities for destruction it's
@@ -596,10 +592,12 @@ void render(Memory *gs) {
     game_summary.header_y_end = 30 + summary.y;
     game_summary.scale = scale;
 
-    int enemies_killed_points = 100 * t->enemies_killed;
-    int current_health_bonus = 50 * t->player.current_health;
-    int completion_timer_bonus = 25 * t->game_timer;
-    int score = enemies_killed_points + current_health_bonus;
+    int enemies_killed_points = 250 * t->enemies_killed;
+    int current_health_bonus = 500 * t->player.current_health;
+    // (TODO) can depend on the difficulty or level
+    int completion_bonus = 1000;
+    int score = enemies_killed_points + current_health_bonus + completion_bonus;
+    // (TODO) difficulty bonus multiplier
 
     draw_post_game_summary_header(&game_summary, scale);
     draw_score_breakdown(&game_summary, "TIME SURVIVED",
@@ -608,25 +606,13 @@ void render(Memory *gs) {
                          TextFormat("%i", current_health_bonus));
     draw_score_breakdown(&game_summary, "ENEMIES KILLED",
                          TextFormat("%i", enemies_killed_points));
+    draw_score_breakdown(&game_summary, "COMPLETION BONUS", "1000");
 
     // (TODO fix later)
     game_summary.gap_y += 20;
     draw_score_breakdown(&game_summary, "FINAL SCORE", TextFormat("%i", score));
     draw_score_breakdown(&game_summary, "RANK", "C");
   }
-
-  // --------------------------------
-  //          MISSION COMPLETE
-  // --------------------------------
-  // TIME SURVIVED ............  1500
-  // ENEMIES DESTROYED ........  2600
-  // ACCURACY BONUS ...........   800
-  // COMBO MULTIPLIER .........  ×3.5
-  // --------------------------------
-  // FINAL SCORE ..............  4900
-  // RANK .....................  S
-  // --------------------------------
-  // PRESS R TO RESTART
 
   DrawFPS(0, 0);
   EndDrawing();
