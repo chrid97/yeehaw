@@ -2,6 +2,7 @@
 #include "platform.h"
 #include "raylib.h"
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 int random_between(int min, int max) {
@@ -130,4 +131,8 @@ void draw_entity_collision_box(Entity *entity) {
   DrawLineV(p2, p3, c);
   DrawLineV(p3, p4, c);
   DrawLineV(p4, p1, c);
+}
+
+static inline void print_vector2(Vector2 v) {
+  printf("(x: %f, y: %f)\n", v.x, v.y);
 }

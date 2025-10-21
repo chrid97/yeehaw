@@ -1,3 +1,7 @@
+// ------------- GUN TODO ----------------
+// Add slight aim assit
+// Make collision hitbox bigger
+//
 // (TODO) destroy bullets when they fly off the top of the screen
 // (tood) dont perfom collision detection on entiteis off screen
 // todo
@@ -112,9 +116,11 @@ Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
 
 Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
   Entity *projectile = entity_spawn(t, x, y, ENTITY_PROJECTILE);
-  projectile->color = RED;
+  projectile->color = PURPLE;
   projectile->width = 0.2;
   projectile->height = 0.2;
+  projectile->vel.x = 0;
+  projectile->vel.y = 25.0f;
   set_flag(projectile, EntityFlags_IsProjectile);
 
   return projectile;
@@ -315,11 +321,29 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
         continue;
       }
 
-      if (is_set(a, EntityFlags_IsProjectile)) {
-        a->type = ENTITY_NONE;
-      }
+      if (is_set(a, EntityFlags_IsProjectile) &&
+          is_set(b, EntityFlags_IsProjectile)) {
+        if (!is_set(a, EntityFlags_IsPlayer)) {
+          a->vel.y = -a->vel.y;
+          a->vel.x = -a->vel.x;
 
-      if (is_set(b, EntityFlags_IsProjectile)) {
+          a->color = GOLD;
+
+          // move it slightly along new direction so it doesn't overlap again
+          a->pos.y += a->vel.y * FIXED_DT;
+          b->type = ENTITY_NONE;
+        }
+        if (!is_set(b, EntityFlags_IsPlayer)) {
+          b->vel.y = -b->vel.y;
+          b->vel.x = -b->vel.x;
+
+          b->color = GOLD;
+          b->pos.y += b->vel.y * FIXED_DT;
+          a->type = ENTITY_NONE;
+        }
+      } else if (is_set(a, EntityFlags_IsProjectile)) {
+        a->type = ENTITY_NONE;
+      } else if (is_set(b, EntityFlags_IsProjectile)) {
         b->type = ENTITY_NONE;
       }
 
@@ -356,9 +380,10 @@ void update_entities(Memory *memory) {
       continue;
     }
 
-    // (NOTE) maybe I don't have to mark offscreen entities for destruction it's
-    // not like i'm replacing them, i dont plan for this to be an infinite
-    // runner anymore. Oh but I do want to mark bullets for destruction
+    // (NOTE) maybe I don't have to mark offscreen entities for destruction
+    // it's not like i'm replacing them, i dont plan for this to be an
+    // infinite runner anymore. Oh but I do want to mark bullets for
+    // destruction
     if (entity->pos.y > t->player.pos.y + 25) {
       entity->type = ENTITY_NONE;
     }
@@ -380,7 +405,8 @@ void update_entities(Memory *memory) {
         Vector2 spawn_pos = Vector2Add(direction, entity_center);
         Entity *bullet = entity_projectile_spawn(t, spawn_pos.x, spawn_pos.y);
 
-        bullet->vel = Vector2Scale(direction, 25);
+        bullet->vel = Vector2Scale(direction, bullet->vel.y);
+        print_vector2(bullet->vel);
         entity->weapon_cooldown = 2.5f;
       }
     } break;
@@ -406,11 +432,12 @@ void update(Memory *memory) {
   float dt = GetFrameTime();
   // --- Input ---
   if (IsKeyPressed(KEY_SPACE)) {
-    float x = t->player.pos.x - 0.35f;
-    float y = t->player.pos.y - 0.5f;
+    float x = t->player.pos.x - 0.2;
+    float y = t->player.pos.y - 0.2;
     Entity *projectile = entity_projectile_spawn(t, x, y);
-    projectile->vel.x = 0;
-    projectile->vel.y = -25.0f;
+    projectile->vel.y = -projectile->vel.y;
+    projectile->color = WHITE;
+    set_flag(projectile, EntityFlags_IsPlayer);
   }
 
   if (IsKeyPressed(KEY_ONE)) {
@@ -548,8 +575,13 @@ void render(Memory *gs) {
     } break;
 
     case ENTITY_PROJECTILE: {
-      DrawRectangle(projected.x, projected.y, entity->width * 32,
-                    entity->height * 16, entity->color);
+      Vector3 cube_center = {entity->pos.x + entity->width * 0.5f,
+                             entity->pos.y + entity->height * 0.5f, 0};
+      float cube_depth = entity->height;
+      float cube_height = 2.0f;
+      float tilt_angle = 0.0f;
+      draw_iso_cube(cube_center, entity->width, cube_depth, cube_height,
+                    tilt_angle, entity->color);
     } break;
 
     case ENTITY_GUNMEN: {

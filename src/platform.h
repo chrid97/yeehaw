@@ -29,6 +29,7 @@ typedef enum {
 typedef enum {
   EntityFlags_IsDestructable = (1 << 0),
   EntityFlags_IsProjectile = (1 << 1),
+  EntityFlags_IsPlayer = (1 << 2),
 } EntityFlags;
 
 typedef struct {
