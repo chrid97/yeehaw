@@ -90,6 +90,8 @@ typedef struct {
   Texture2D tilesheet;
   Music bg_music;
   Sound hit_sound;
+  Sound enemy_death_sound;
+  Sound player_gunshot;
   bool debug_on;
   bool physics_movement;
 } PermanentStorage;

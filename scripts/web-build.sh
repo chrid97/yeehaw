@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source ~/third-party/emsdk/emsdk_env.fish
+
 emcc -o build/game.html src/main.c \
   -s USE_GLFW=3 \
   -s ASYNCIFY \

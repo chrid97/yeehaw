@@ -1,15 +1,21 @@
 // ------------- GUN TODO ----------------
 // Add slight aim assit
 // Make collision hitbox bigger
-//
 // (TODO) destroy bullets when they fly off the top of the screen
-// (tood) dont perfom collision detection on entiteis off screen
-// todo
+// (TODO) if a ritchoetd bullet kills an enemy it should ritochet again to the
+// nearest enemy if its within certain tiles or soemthing or myabe it can
+// ritchoet off another close bullet
+// maybe bullets should shoot at an angle when I'm moving sideways?
+//
+// AMMO / RELOAD
+//
+// ---------- MECHANICS TODO -------------
+// SPRITNING / STAMINA
+//
 // (TODO) Destroy entities not on screen
 // (TODO) Move to units for time and world pos
 // (TODO) Make input state machine
 // (TODO) auto generate compile_commands.json
-// (MAYBE) bullet on bullet ritochet?
 //
 // (MAYBE) in hades you can get extra lives, maybe you can do the same thing
 // here but playign with fewer lives gives you some bonus. Myabe a score bonus?
@@ -184,7 +190,7 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->player.color = WHITE;
   t->player.current_health = 2;
   t->player.max_health = 2;
-  t->player.vel = (Vector2){5, 6};
+  t->player.vel = (Vector2){8, 6};
 
   t->camera.zoom = 1.0f;
 
@@ -203,6 +209,7 @@ void compact_entities(TransientStorage *t) {
 }
 
 void update_timers(TransientStorage *t) {
+  t->player.weapon_cooldown -= FIXED_DT;
   t->game_timer += FIXED_DT;
   if (t->player.damage_cooldown > 0.0f) {
     t->player.damage_cooldown -= FIXED_DT;
@@ -274,7 +281,7 @@ void update_player(TransientStorage *t, float turn_input, bool movement) {
     t->player.pos.x += (turn_input * t->player.vel.x) * dt;
   }
 
-  t->player.pos.y -= t->player.vel.y * dt;
+  // t->player.pos.y -= t->player.vel.y * dt;
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
@@ -349,6 +356,8 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
 
       if (is_set(a, EntityFlags_IsDestructable)) {
         if (a->type == ENTITY_GUNMEN) {
+          b->color = WHITE;
+          PlaySound(p->enemy_death_sound);
           t->enemies_killed++;
         }
         a->type = ENTITY_NONE;
@@ -356,6 +365,8 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
 
       if (is_set(b, EntityFlags_IsDestructable)) {
         if (b->type == ENTITY_GUNMEN) {
+          b->color = WHITE;
+          PlaySound(p->enemy_death_sound);
           t->enemies_killed++;
         }
         b->type = ENTITY_NONE;
@@ -406,7 +417,6 @@ void update_entities(Memory *memory) {
         Entity *bullet = entity_projectile_spawn(t, spawn_pos.x, spawn_pos.y);
 
         bullet->vel = Vector2Scale(direction, bullet->vel.y);
-        print_vector2(bullet->vel);
         entity->weapon_cooldown = 2.5f;
       }
     } break;
@@ -431,13 +441,15 @@ void update(Memory *memory) {
 
   float dt = GetFrameTime();
   // --- Input ---
-  if (IsKeyPressed(KEY_SPACE)) {
+  if (IsKeyPressed(KEY_SPACE) && t->player.weapon_cooldown <= 0) {
+    PlaySound(p->player_gunshot);
     float x = t->player.pos.x - 0.2;
     float y = t->player.pos.y - 0.2;
     Entity *projectile = entity_projectile_spawn(t, x, y);
     projectile->vel.y = -projectile->vel.y;
     projectile->color = WHITE;
     set_flag(projectile, EntityFlags_IsPlayer);
+    t->player.weapon_cooldown = 0.5f;
   }
 
   if (IsKeyPressed(KEY_ONE)) {
