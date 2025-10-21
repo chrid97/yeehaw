@@ -161,7 +161,7 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->player.color = WHITE;
   t->player.current_health = 2;
   t->player.max_health = 2;
-  t->player.vel = (Vector2){0, 6.0};
+  t->player.vel = (Vector2){5, 6};
 
   t->camera.zoom = 1.0f;
 
@@ -219,34 +219,39 @@ void update_entity_movement(TransientStorage *t) {
   }
 }
 
-void update_player(TransientStorage *t, float turn_input) {
+void update_player(TransientStorage *t, float turn_input, bool movement) {
   float dt = FIXED_DT;
   // reset players color if damaged
   t->player.color = WHITE;
   // --- Player Movement ---
-  float turn_speed = 540.0f;
-  float turn_drag = 50.0f;
-  float target_angle = 45.0f * turn_input;
-  float angle_accel = (target_angle - t->player.angle) * turn_speed;
-  t->player.angle_vel += angle_accel * dt;
-  t->player.angle_vel -= t->player.angle_vel * turn_drag * dt;
-  t->player.angle += t->player.angle_vel * dt;
-  Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
-                     sinf((t->player.angle - 90.0f) * DEG2RAD)};
-  t->player.pos.y -= t->player.vel.y * dt;
-  float accel_strength = 250.0f;
-  float drag = 25.0f;
+  if (movement) {
+    float turn_speed = 540.0f;
+    float turn_drag = 50.0f;
+    float target_angle = 45.0f * turn_input;
+    float angle_accel = (target_angle - t->player.angle) * turn_speed;
+    t->player.angle_vel += angle_accel * dt;
+    t->player.angle_vel -= t->player.angle_vel * turn_drag * dt;
+    t->player.angle += t->player.angle_vel * dt;
+    Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
+                       sinf((t->player.angle - 90.0f) * DEG2RAD)};
+    float accel_strength = 250.0f;
+    float drag = 25.0f;
 
-  Vector2 accel = {forward.x * accel_strength, 0};
-  t->player.vel.x += accel.x * dt;
-  t->player.vel.x -= t->player.vel.x * drag * dt;
+    Vector2 accel = {forward.x * accel_strength, 0};
+    t->player.vel.x += accel.x * dt;
+    t->player.vel.x -= t->player.vel.x * drag * dt;
 
-  // direction-flip damping
-  if ((turn_input > 0 && t->player.vel.x < 0) ||
-      (turn_input < 0 && t->player.vel.x > 0)) {
-    t->player.vel.x *= 0.75f;
+    // direction-flip damping
+    if ((turn_input > 0 && t->player.vel.x < 0) ||
+        (turn_input < 0 && t->player.vel.x > 0)) {
+      t->player.vel.x *= 0.75f;
+    }
+    t->player.pos.x += t->player.vel.x * dt;
+  } else {
+    t->player.pos.x += (turn_input * t->player.vel.x) * dt;
   }
-  t->player.pos.x += t->player.vel.x * dt;
+
+  t->player.pos.y -= t->player.vel.y * dt;
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
@@ -383,6 +388,10 @@ void update(Memory *memory) {
                                               .type = ENTITY_PROJECTILE};
   }
 
+  if (IsKeyPressed(KEY_ONE)) {
+    p->physics_movement = !p->physics_movement;
+  }
+
   if (IsKeyPressed(KEY_P)) {
     p->debug_on = !p->debug_on;
   }
@@ -422,7 +431,7 @@ void update(Memory *memory) {
     }
 
     update_timers(t);
-    update_player(t, turn_input);
+    update_player(t, turn_input, p->physics_movement);
     update_entities(memory);
     update_entity_movement(t);
     resolve_collisions(t, p);

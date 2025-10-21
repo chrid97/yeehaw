@@ -82,6 +82,7 @@ typedef struct {
   Music bg_music;
   Sound hit_sound;
   bool debug_on;
+  bool physics_movement;
 } PermanentStorage;
 
 typedef struct {
