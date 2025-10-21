@@ -51,6 +51,9 @@ typedef struct {
   float scale;
 } PostGameSummary;
 
+void set_flag(Entity *entity, uint32_t flags) { entity->flags |= flags; }
+bool is_set(Entity *entity, uint32_t flags) { return entity->flags & flags; }
+
 void draw_post_game_summary_header(PostGameSummary *summary, float scale) {
   Rectangle rect = summary->rect;
   DrawRectangle(rect.x * scale, rect.y * scale, rect.width * scale,
@@ -107,6 +110,16 @@ Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
   return &t->entities[t->entity_count - 1];
 }
 
+Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
+  Entity *projectile = entity_spawn(t, x, y, ENTITY_PROJECTILE);
+  projectile->color = RED;
+  projectile->width = 0.2;
+  projectile->height = 0.2;
+  set_flag(projectile, EntityFlags_IsProjectile);
+
+  return projectile;
+};
+
 bool is_onscreen(Entity *a, Entity *player) {
   if (a->pos.y < player->pos.y - 20 || a->pos.y > player->pos.y + 20) {
     return false;
@@ -127,10 +140,14 @@ void load_map(TransientStorage *t, const char *path) {
     for (int x = 0; line[x] != '\0' && line[x] != '\n'; x++) {
       char c = line[x];
       if (c == '^') {
-        entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
+        Entity *entity =
+            entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
       }
       if (c == 'x') {
-        entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_GUNMEN);
+
+        Entity *entity =
+            entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_GUNMEN);
+        set_flag(entity, EntityFlags_IsDestructable);
       }
       if (c == '1') {
         t->map_end = (Vector2){0, y};
@@ -269,7 +286,7 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
     if (CheckCollisionRecs(player_rect, entity_rect) &&
         t->player.damage_cooldown <= 0) {
       PlaySound(p->hit_sound);
-      t->player.current_health--;
+      // t->player.current_health--;
       t->player.damage_cooldown = 0.5f;
       t->shake_timer = 0.5f;
 
@@ -282,11 +299,6 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
   // Entity-entity collision
   for (int i = 0; i < t->entity_count; i++) {
     Entity *a = &t->entities[i];
-    // skip all updates on inactive entities
-    if (!a->active) {
-      continue;
-    }
-
     if (a->type == ENTITY_NONE || !a->active) {
       continue;
     }
@@ -297,11 +309,31 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
     Rectangle a_rect = {a->pos.x, a->pos.y, a->width, a->height};
     for (int j = i + 1; j < t->entity_count; j++) {
       Entity *b = &t->entities[j];
-
       Rectangle b_rect = {b->pos.x, b->pos.y, b->width, b->height};
-      if (a->type != ENTITY_HAZARD && CheckCollisionRecs(a_rect, b_rect)) {
-        t->enemies_killed++;
+
+      if (!CheckCollisionRecs(a_rect, b_rect)) {
+        continue;
+      }
+
+      if (is_set(a, EntityFlags_IsProjectile)) {
         a->type = ENTITY_NONE;
+      }
+
+      if (is_set(b, EntityFlags_IsProjectile)) {
+        b->type = ENTITY_NONE;
+      }
+
+      if (is_set(a, EntityFlags_IsDestructable)) {
+        if (a->type == ENTITY_GUNMEN) {
+          t->enemies_killed++;
+        }
+        a->type = ENTITY_NONE;
+      }
+
+      if (is_set(b, EntityFlags_IsDestructable)) {
+        if (b->type == ENTITY_GUNMEN) {
+          t->enemies_killed++;
+        }
         b->type = ENTITY_NONE;
       }
     }
@@ -346,13 +378,9 @@ void update_entities(Memory *memory) {
         Vector2 direction =
             Vector2Normalize(Vector2Subtract(player_center, entity_center));
         Vector2 spawn_pos = Vector2Add(direction, entity_center);
-        Entity *bullet =
-            entity_spawn(t, spawn_pos.x, spawn_pos.y, ENTITY_PROJECTILE);
+        Entity *bullet = entity_projectile_spawn(t, spawn_pos.x, spawn_pos.y);
 
         bullet->vel = Vector2Scale(direction, 25);
-        bullet->color = RED;
-        bullet->width = 0.2;
-        bullet->height = 0.2;
         entity->weapon_cooldown = 2.5f;
       }
     } break;
@@ -378,14 +406,11 @@ void update(Memory *memory) {
   float dt = GetFrameTime();
   // --- Input ---
   if (IsKeyPressed(KEY_SPACE)) {
-    t->entities[t->entity_count++] = (Entity){.pos.x = t->player.pos.x - 0.35f,
-                                              .pos.y = t->player.pos.y - 0.5f,
-                                              .color = RED,
-                                              .width = 0.2,
-                                              .height = 0.2,
-                                              .vel.x = 0,
-                                              .vel.y = -25.0f,
-                                              .type = ENTITY_PROJECTILE};
+    float x = t->player.pos.x - 0.35f;
+    float y = t->player.pos.y - 0.5f;
+    Entity *projectile = entity_projectile_spawn(t, x, y);
+    projectile->vel.x = 0;
+    projectile->vel.y = -25.0f;
   }
 
   if (IsKeyPressed(KEY_ONE)) {

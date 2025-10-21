@@ -5,6 +5,7 @@
 // Constants
 // -------------------------------------
 #include "raylib.h"
+#include <stdint.h>
 #define TILE_SIZE 32
 
 #define VIRTUAL_WIDTH 640
@@ -25,8 +26,14 @@ typedef enum {
   ENTITY_GUNMEN,
 } EntityType;
 
+typedef enum {
+  EntityFlags_IsDestructable = (1 << 0),
+  EntityFlags_IsProjectile = (1 << 1),
+} EntityFlags;
+
 typedef struct {
   EntityType type;
+  uint32_t flags;
   bool active;
 
   float height;
@@ -49,6 +56,7 @@ typedef struct {
 // Transient (resettable) storage
 // -------------------------------------
 typedef struct {
+
   Entity entities[MAX_ENTITIES];
   int entity_count;
   Entity *draw_list[MAX_ENTITIES];
