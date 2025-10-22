@@ -64,7 +64,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: /tmp/tmpoqalcdq8.js
+// include: /tmp/tmpj4qu9nmg.js
 
   Module['expectedDataFileDownloads'] ??= 0;
   Module['expectedDataFileDownloads']++;
@@ -83,8 +83,8 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
         // web worker
         PACKAGE_PATH = encodeURIComponent(location.pathname.substring(0, location.pathname.lastIndexOf('/')) + '/');
       }
-      var PACKAGE_NAME = 'build/yeehaw.data';
-      var REMOTE_PACKAGE_BASE = 'yeehaw.data';
+      var PACKAGE_NAME = 'build/game.data';
+      var REMOTE_PACKAGE_BASE = 'game.data';
       var REMOTE_PACKAGE_NAME = Module['locateFile']?.(REMOTE_PACKAGE_BASE, '') ?? REMOTE_PACKAGE_BASE;
       var REMOTE_PACKAGE_SIZE = metadata['remote_package_size'];
 
@@ -173,9 +173,9 @@ Module['FS_createPath']("/", "assets", true, true);
           Module['FS_createDataFile'](name, null, data, true, true, true);
           Module['removeRunDependency'](`fp ${name}`);
           }
-          Module['removeRunDependency']('datafile_build/yeehaw.data');
+          Module['removeRunDependency']('datafile_build/game.data');
       }
-      Module['addRunDependency']('datafile_build/yeehaw.data');
+      Module['addRunDependency']('datafile_build/game.data');
 
       Module['preloadResults'] ??= {};
 
@@ -197,21 +197,21 @@ Module['FS_createPath']("/", "assets", true, true);
 
   })();
 
-// end include: /tmp/tmpoqalcdq8.js
-// include: /tmp/tmpcy5mhjfr.js
+// end include: /tmp/tmpj4qu9nmg.js
+// include: /tmp/tmp4rso3uxu.js
 
     // All the pre-js content up to here must remain later on, we need to run
     // it.
     if ((typeof ENVIRONMENT_IS_WASM_WORKER != 'undefined' && ENVIRONMENT_IS_WASM_WORKER) || (typeof ENVIRONMENT_IS_PTHREAD != 'undefined' && ENVIRONMENT_IS_PTHREAD) || (typeof ENVIRONMENT_IS_AUDIO_WORKLET != 'undefined' && ENVIRONMENT_IS_AUDIO_WORKLET)) Module['preRun'] = [];
     var necessaryPreJSTasks = Module['preRun'].slice();
-  // end include: /tmp/tmpcy5mhjfr.js
-// include: /tmp/tmpfszj9esh.js
+  // end include: /tmp/tmp4rso3uxu.js
+// include: /tmp/tmpcv0_573m.js
 
     if (!Module['preRun']) throw 'Module.preRun should exist because file support used it; did a pre-js delete it?';
     necessaryPreJSTasks.forEach((task) => {
       if (Module['preRun'].indexOf(task) < 0) throw 'All preRun tasks that exist before user pre-js code should remain after; did you replace Module or modify Module.preRun?';
     });
-  // end include: /tmp/tmpfszj9esh.js
+  // end include: /tmp/tmpcv0_573m.js
 
 
 var arguments_ = [];
@@ -743,7 +743,7 @@ function createExportWrapper(name, nargs) {
 var wasmBinaryFile;
 
 function findWasmBinary() {
-    return locateFile('yeehaw.wasm');
+    return locateFile('game.wasm');
 }
 
 function getBinarySync(file) {
