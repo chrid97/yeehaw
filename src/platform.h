@@ -12,7 +12,7 @@
 #define VIRTUAL_HEIGHT 360
 #define FIXED_DT (1.0f / 120.0f)
 
-#define MAX_ENTITIES 10000
+#define MAX_ENTITIES 1000
 
 // -------------------------------------
 // Enums

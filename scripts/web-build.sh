@@ -11,7 +11,7 @@ emcc -o build/game.html \
   -s ASYNCIFY \
   -s INITIAL_MEMORY=64MB \
   -s ALLOW_MEMORY_GROWTH=1 \
-  -s STACK_SIZE=256KB \
+  -s STACK_SIZE=512KB \
   -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' \
   -s FORCE_FILESYSTEM=1 \
   -DPLATFORM_WEB \

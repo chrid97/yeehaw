@@ -281,7 +281,7 @@ void update_player(TransientStorage *t, float turn_input, bool movement) {
     t->player.pos.x += (turn_input * t->player.vel.x) * dt;
   }
 
-  // t->player.pos.y -= t->player.vel.y * dt;
+  t->player.pos.y -= t->player.vel.y * dt;
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
