@@ -123,8 +123,8 @@ Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
 Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
   Entity *projectile = entity_spawn(t, x, y, ENTITY_PROJECTILE);
   projectile->color = PURPLE;
-  projectile->width = 0.2;
-  projectile->height = 0.2;
+  projectile->width = 0.25;
+  projectile->height = 0.25;
   projectile->vel.x = 0;
   projectile->vel.y = 25.0f;
   set_flag(projectile, EntityFlags_IsProjectile);
@@ -191,6 +191,8 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->player.current_health = 2;
   t->player.max_health = 2;
   t->player.vel = (Vector2){8, 6};
+  // t->player.parry_frame_time = 6;
+  t->player.parry_duration = 0;
 
   t->camera.zoom = 1.0f;
 
@@ -249,7 +251,8 @@ void update_entity_movement(TransientStorage *t) {
   }
 }
 
-void update_player(TransientStorage *t, float turn_input, bool movement) {
+void update_player(TransientStorage *t, float turn_input, bool movement,
+                   PermanentStorage *p) {
   float dt = FIXED_DT;
   // reset players color if damaged
   t->player.color = WHITE;
@@ -285,6 +288,77 @@ void update_player(TransientStorage *t, float turn_input, bool movement) {
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
+
+  t->player.parry_area = (Rectangle){
+      .x = t->player.pos.x - 2.0f,
+      .y = t->player.pos.y - 3.5f,
+      .width = 4.0f,
+      .height = 1.5f,
+  };
+
+  bool parried = false;
+
+  if (t->player.is_firing && t->player.parry_duration <= 0.0f) {
+    t->player.parry_duration = 0.2f;
+    t->player.pending_shot = true; // queue normal shot in case parry misses
+  }
+
+  if (t->player.parry_duration > 0.0f) {
+    t->player.parry_duration -= FIXED_DT;
+
+    for (int i = 0; i < t->entity_count; i++) {
+      Entity *a = &t->entities[i];
+      if (!is_set(a, EntityFlags_IsProjectile) ||
+          is_set(a, EntityFlags_IsPlayer))
+        continue;
+
+      Rectangle parry = t->player.parry_area;
+      Rectangle entity_rect = {a->pos.x, a->pos.y, a->width, a->height};
+      if (!CheckCollisionRecs(parry, entity_rect))
+        continue;
+
+      if (a->parry_detected)
+        continue;
+
+      a->parry_detected = true;
+      parried = true;
+
+      float lead_time = 0.1f;
+      Vector2 predicted = Vector2Add(a->pos, Vector2Scale(a->vel, lead_time));
+      Vector2 dir_to_predicted =
+          Vector2Normalize(Vector2Subtract(predicted, t->player.pos));
+
+      float spawn_offset = 0.2f;
+      Vector2 spawn_pos = Vector2Add(
+          t->player.pos, Vector2Scale(dir_to_predicted, spawn_offset));
+
+      PlaySound(p->player_gunshot);
+      printf("boom\n");
+      Entity *projectile = entity_projectile_spawn(t, spawn_pos.x, spawn_pos.y);
+      projectile->vel = Vector2Scale(dir_to_predicted, projectile->vel.y);
+      projectile->color = WHITE;
+      set_flag(projectile, EntityFlags_IsPlayer);
+    }
+
+    if (!parried && t->player.parry_duration <= 0.0f &&
+        t->player.pending_shot) {
+      PlaySound(p->player_gunshot);
+      float x = t->player.pos.x - 0.2f;
+      float y = t->player.pos.y - 0.2f;
+      Entity *projectile = entity_projectile_spawn(t, x, y);
+      projectile->vel.y = -projectile->vel.y;
+      projectile->color = WHITE;
+      set_flag(projectile, EntityFlags_IsPlayer);
+      t->player.pending_shot = false;
+    }
+
+    if (parried) {
+      t->player.pending_shot = false;
+    }
+  }
+
+  t->player.weapon_cooldown = 0.5f;
+  t->player.is_firing = false;
 }
 
 void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
@@ -336,7 +410,8 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
 
           a->color = GOLD;
 
-          // move it slightly along new direction so it doesn't overlap again
+          // move it slightly along new direction so it
+          // doesn't overlap again
           a->pos.y += a->vel.y * FIXED_DT;
           b->type = ENTITY_NONE;
         }
@@ -382,6 +457,8 @@ void update_entities(Memory *memory) {
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
 
+    // TODO Destroy offscreen bullets
+
     if (is_onscreen(entity, &t->player)) {
       entity->active = true;
     }
@@ -391,10 +468,10 @@ void update_entities(Memory *memory) {
       continue;
     }
 
-    // (NOTE) maybe I don't have to mark offscreen entities for destruction
-    // it's not like i'm replacing them, i dont plan for this to be an
-    // infinite runner anymore. Oh but I do want to mark bullets for
-    // destruction
+    // (NOTE) maybe I don't have to mark offscreen entities
+    // for destruction it's not like i'm replacing them, i
+    // dont plan for this to be an infinite runner anymore.
+    // Oh but I do want to mark bullets for destruction
     if (entity->pos.y > t->player.pos.y + 25) {
       entity->type = ENTITY_NONE;
     }
@@ -441,16 +518,12 @@ void update(Memory *memory) {
 
   float dt = GetFrameTime();
   // --- Input ---
-  if (IsKeyPressed(KEY_SPACE) && t->player.weapon_cooldown <= 0) {
-    PlaySound(p->player_gunshot);
-    float x = t->player.pos.x - 0.2;
-    float y = t->player.pos.y - 0.2;
-    Entity *projectile = entity_projectile_spawn(t, x, y);
-    projectile->vel.y = -projectile->vel.y;
-    projectile->color = WHITE;
-    set_flag(projectile, EntityFlags_IsPlayer);
-    t->player.weapon_cooldown = 0.5f;
+
+  if (IsKeyPressed(KEY_SPACE)) {
+    t->player.is_firing = true;
   }
+
+  // t->player.is_firing = IsKeyDown(KEY_SPACE);
 
   if (IsKeyPressed(KEY_ONE)) {
     p->physics_movement = !p->physics_movement;
@@ -495,7 +568,7 @@ void update(Memory *memory) {
     }
 
     update_timers(t);
-    update_player(t, turn_input, p->physics_movement);
+    update_player(t, turn_input, p->physics_movement, p);
     update_entities(memory);
     update_entity_movement(t);
     resolve_collisions(t, p);
@@ -538,7 +611,8 @@ void render(Memory *gs) {
   Rectangle tile = get_tile_source_rect(tilesheet, 36);
 
   // --- Draw world ---
-  // (NOTE) figure out how to start from 0 instead of a negative number
+  // (NOTE) figure out how to start from 0 instead of a
+  // negative number
   for (int y = tile_y - 30; y < tile_y + 14; y++) {
     // Left side
     for (int x = -21; x < -5; x++) {
@@ -577,6 +651,7 @@ void render(Memory *gs) {
                              t->player.pos.y + t->player.height / 2.0f, 0};
       draw_iso_cube(cube_center, t->player.width, t->player.height, 10.5f,
                     t->player.angle, t->player.color);
+
     } break;
 
     case ENTITY_HAZARD: {
@@ -594,6 +669,7 @@ void render(Memory *gs) {
       float tilt_angle = 0.0f;
       draw_iso_cube(cube_center, entity->width, cube_depth, cube_height,
                     tilt_angle, entity->color);
+
     } break;
 
     case ENTITY_GUNMEN: {
@@ -608,11 +684,34 @@ void render(Memory *gs) {
     }
 
     if (p->debug_on && entity->type != ENTITY_PROJECTILE) {
-      // Draw Collision Debug Iso Box
       draw_entity_collision_box(entity);
       DrawPlayerDebug(&t->player);
       DrawRectangleLines(entity->pos.x, entity->pos.y, entity->width,
                          entity->height, BLACK);
+
+      // parry hitbox
+      if (entity->type == ENTITY_PLAYER) {
+        Rectangle rect = entity->parry_area;
+        Vector2 p1 = isometric_projection((Vector3){rect.x, rect.y, 0});
+        Vector2 p2 =
+            isometric_projection((Vector3){rect.x + rect.width, rect.y, 0});
+        Vector2 p3 = isometric_projection(
+            (Vector3){rect.x + rect.width, rect.y + rect.height, 0});
+        Vector2 p4 =
+            isometric_projection((Vector3){rect.x, rect.y + rect.height, 0});
+
+        Color c = ORANGE;
+        DrawLineV(p1, p2, c);
+        DrawLineV(p2, p3, c);
+        DrawLineV(p3, p4, c);
+        DrawLineV(p4, p1, c);
+
+        if (t->player.parry_duration > 0) {
+          Color fill = (Color){255, 0, 0, 120};
+          DrawTriangle(p1, p3, p2, fill);
+          DrawTriangle(p1, p4, p3, fill);
+        }
+      }
     }
   }
 

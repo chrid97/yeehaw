@@ -50,6 +50,13 @@ typedef struct {
 
   float damage_cooldown;
   float weapon_cooldown;
+  bool is_firing;
+
+  bool parry_detected;
+  Rectangle parry_area;
+  float parry_duration;
+  bool pending_shot;
+
   Color color;
 } Entity;
 
