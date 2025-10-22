@@ -24,6 +24,7 @@ typedef enum {
   ENTITY_PLAYER,
   ENTITY_PROJECTILE,
   ENTITY_GUNMEN,
+  ENTITY_PARTICLE,
 } EntityType;
 
 typedef enum {
@@ -88,6 +89,7 @@ typedef struct {
   int score;
   // map stuff
   Vector2 map_end;
+
 } TransientStorage;
 
 // -------------------------------------

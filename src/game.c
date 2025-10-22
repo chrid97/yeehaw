@@ -188,10 +188,9 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->player.width = 0.35f;
   t->player.height = 0.75f;
   t->player.color = WHITE;
-  t->player.current_health = 2;
-  t->player.max_health = 2;
-  t->player.vel = (Vector2){8, 6};
-  // t->player.parry_frame_time = 6;
+  t->player.current_health = 3;
+  t->player.max_health = 3;
+  t->player.vel = (Vector2){0, 7.2};
   t->player.parry_duration = 0;
 
   t->camera.zoom = 1.0f;
@@ -257,7 +256,7 @@ void update_player(TransientStorage *t, float turn_input, bool movement,
   // reset players color if damaged
   t->player.color = WHITE;
   // --- Player Movement ---
-  if (movement) {
+  if (!movement) {
     float turn_speed = 540.0f;
     float turn_drag = 50.0f;
     float target_angle = 45.0f * turn_input;
@@ -267,7 +266,7 @@ void update_player(TransientStorage *t, float turn_input, bool movement,
     t->player.angle += t->player.angle_vel * dt;
     Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
                        sinf((t->player.angle - 90.0f) * DEG2RAD)};
-    float accel_strength = 250.0f;
+    float accel_strength = 325.0f;
     float drag = 25.0f;
 
     Vector2 accel = {forward.x * accel_strength, 0};
@@ -300,7 +299,7 @@ void update_player(TransientStorage *t, float turn_input, bool movement,
 
   if (t->player.is_firing && t->player.parry_duration <= 0.0f) {
     t->player.parry_duration = 0.2f;
-    t->player.pending_shot = true; // queue normal shot in case parry misses
+    t->player.pending_shot = true;
   }
 
   if (t->player.parry_duration > 0.0f) {
@@ -333,7 +332,6 @@ void update_player(TransientStorage *t, float turn_input, bool movement,
           t->player.pos, Vector2Scale(dir_to_predicted, spawn_offset));
 
       PlaySound(p->player_gunshot);
-      printf("boom\n");
       Entity *projectile = entity_projectile_spawn(t, spawn_pos.x, spawn_pos.y);
       projectile->vel = Vector2Scale(dir_to_predicted, projectile->vel.y);
       projectile->color = WHITE;
@@ -373,7 +371,7 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
     if (CheckCollisionRecs(player_rect, entity_rect) &&
         t->player.damage_cooldown <= 0) {
       PlaySound(p->hit_sound);
-      // t->player.current_health--;
+      t->player.current_health--;
       t->player.damage_cooldown = 0.5f;
       t->shake_timer = 0.5f;
 
@@ -404,11 +402,15 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
 
       if (is_set(a, EntityFlags_IsProjectile) &&
           is_set(b, EntityFlags_IsProjectile)) {
+
         if (!is_set(a, EntityFlags_IsPlayer)) {
           a->vel.y = -a->vel.y;
           a->vel.x = -a->vel.x;
 
           a->color = GOLD;
+
+          // store location of collision for particles and sound
+          //  CollisionEvent
 
           // move it slightly along new direction so it
           // doesn't overlap again
