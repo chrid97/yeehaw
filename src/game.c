@@ -1,6 +1,4 @@
 // ------------- GUN TODO ----------------
-// Add slight aim assit
-// Make collision hitbox bigger
 // (TODO) destroy bullets when they fly off the top of the screen
 // (TODO) if a ritchoetd bullet kills an enemy it should ritochet again to the
 // nearest enemy if its within certain tiles or soemthing or myabe it can
@@ -128,21 +126,19 @@ void update_timers(TransientStorage *t) {
   if (t->player.damage_cooldown > 0.0f) {
     t->player.damage_cooldown -= FIXED_DT;
     t->player.color = RED;
+  } else {
+    t->player.color = WHITE;
   }
 
   // (TODO) shaking stopped working at some point gotta fix
   if (t->shake_timer > 0) {
     t->shake_timer -= FIXED_DT;
-    float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
-    float shake_magnitude = 10.0f;
-    t->camera.target.x += offset_x * shake_magnitude;
   }
 
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
-    if (entity->weapon_cooldown > 0) {
-      entity->weapon_cooldown -= FIXED_DT;
-    }
+    entity->weapon_cooldown -= FIXED_DT;
+    entity->fade_timer -= FIXED_DT;
   }
 }
 
@@ -157,6 +153,11 @@ void update_entity_movement(TransientStorage *t) {
       entity->pos.y += entity->vel.y * FIXED_DT;
       entity->pos.x += entity->vel.x * FIXED_DT;
     } break;
+    case ENTITY_PARTICLE: {
+      entity->pos.x += entity->vel.x * FIXED_DT;
+      entity->pos.y += entity->vel.y * FIXED_DT;
+      entity->vel = Vector2Scale(entity->vel, 0.9f); // slow down
+    } break;
     default:
       break;
     }
@@ -166,8 +167,6 @@ void update_entity_movement(TransientStorage *t) {
 void update_player(TransientStorage *t, float turn_input, bool movement,
                    PermanentStorage *p) {
   float dt = FIXED_DT;
-  // reset players color if damaged
-  t->player.color = WHITE;
   // --- Player Movement ---
   if (!movement) {
     float turn_speed = 540.0f;
@@ -226,11 +225,15 @@ void update_player(TransientStorage *t, float turn_input, bool movement,
 
       Rectangle parry = t->player.parry_area;
       Rectangle entity_rect = {a->pos.x, a->pos.y, a->width, a->height};
-      if (!CheckCollisionRecs(parry, entity_rect))
-        continue;
 
       if (a->parry_detected)
         continue;
+
+      if (!CheckCollisionRecs(parry, entity_rect))
+        continue;
+
+      t->parry_events[t->parry_events_count++] = a->pos;
+      // printf("%i", t->parry_events_count);
 
       a->parry_detected = true;
       parried = true;
@@ -265,6 +268,13 @@ void update_player(TransientStorage *t, float turn_input, bool movement,
 
     if (parried) {
       t->player.pending_shot = false;
+
+      // t->hitstop_timer = 0.05f;
+      t->hitstop_timer = 0.07f;
+      // (TODO) need to a figure a better way to shake during hitstop
+      // t->shake_timer = 1.05f;
+      t->player.color = GOLD;
+      PlaySound(p->parry_sound);
     }
   }
 
@@ -278,6 +288,10 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
                            t->player.height};
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
+
+    if (entity->type == ENTITY_PARTICLE) {
+      continue;
+    }
 
     Rectangle entity_rect = {entity->pos.x, entity->pos.y, entity->width,
                              entity->height};
@@ -308,6 +322,10 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
     for (int j = i + 1; j < t->entity_count; j++) {
       Entity *b = &t->entities[j];
       Rectangle b_rect = {b->pos.x, b->pos.y, b->width, b->height};
+
+      if (a->type == ENTITY_PARTICLE || b->type == ENTITY_PARTICLE) {
+        continue;
+      }
 
       if (!CheckCollisionRecs(a_rect, b_rect)) {
         continue;
@@ -471,6 +489,16 @@ void update(Memory *memory) {
     return;
   }
 
+  if (t->hitstop_timer > 0) {
+    t->hitstop_timer -= dt;
+    if (t->shake_timer > 0.0f) {
+      t->shake_timer -= FIXED_DT;
+      float offset_x = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+      t->camera.target.x += offset_x * 5.0f;
+    }
+    return;
+  }
+
   t->accumulator += dt;
   int steps = 0;
   const int MAX_STEPS = 8;
@@ -484,17 +512,46 @@ void update(Memory *memory) {
     update_entities(memory);
     update_entity_movement(t);
     resolve_collisions(t, p);
+
+    // Create parry particle
+    for (int i = 0; i < t->parry_events_count; i++) {
+      Vector2 *event = &t->parry_events[i];
+      for (int j = 0; j < 12; j++) {
+        float angle = ((float)j / 12.0f) * 2 * PI;
+        Vector2 dir = {cosf(angle), sinf(angle)};
+        Entity particle = {
+            .type = ENTITY_PARTICLE,
+            .active = false,
+            .pos = *event,
+            .vel = Vector2Scale(dir, 5.0f + (rand() % 3)),
+            .fade_timer = 0.5f,
+            .color = GOLD,
+            .width = 0.1f,
+            .flags = 0,
+            .height = 0.1f,
+        };
+        print_vector2(particle.pos);
+        add_entity(t, particle);
+      }
+    }
+    t->parry_events_count = 0;
+
+    Vector2 player_screen =
+        isometric_projection((Vector3){0, t->player.pos.y, 0});
+    t->camera.target = player_screen;
+    t->camera.offset =
+        (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
+
+    if (t->shake_timer > 0) {
+      float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+      float shake_magnitude = 10.0f;
+      t->camera.target.x += offset_x * shake_magnitude;
+    }
     compact_entities(t);
 
     steps++;
     t->accumulator -= FIXED_DT;
   }
-
-  Vector2 player_screen =
-      isometric_projection((Vector3){0, t->player.pos.y, 0});
-  t->camera.target = player_screen;
-  t->camera.offset =
-      (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 }
 
 // --------------------------------------------------
@@ -589,7 +646,16 @@ void render(Memory *gs) {
       Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
       Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
       DrawTexturePro(p->tilesheet, src, dst, origin, 0, RED);
-    }
+    } break;
+
+    case ENTITY_PARTICLE: {
+      if (entity->fade_timer > 0) {
+        Vector2 project = project_iso(entity->pos);
+        DrawCircle(project.x, project.y, 1, GOLD);
+      } else {
+        entity->type = ENTITY_NONE;
+      }
+    } break;
 
     default:
       break;
@@ -701,6 +767,11 @@ void render(Memory *gs) {
     game_summary.gap_y += 20;
     draw_score_breakdown(&game_summary, "FINAL SCORE", TextFormat("%i", score));
     draw_score_breakdown(&game_summary, "RANK", "C");
+  }
+
+  if (t->hitstop_timer > 0.0f) {
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  (Color){255, 255, 255, 10});
   }
 
   DrawFPS(0, 0);

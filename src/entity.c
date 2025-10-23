@@ -6,6 +6,11 @@
 void set_flag(Entity *entity, uint32_t flags) { entity->flags |= flags; }
 bool is_set(Entity *entity, uint32_t flags) { return entity->flags & flags; }
 
+void add_entity(TransientStorage *t, Entity entity) {
+  assert(t->entity_count < MAX_ENTITIES && "Entity overflow!");
+  t->entities[t->entity_count++] = entity;
+}
+
 Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
   assert(t->entity_count < MAX_ENTITIES && "Entity overflow!");
   t->entities[t->entity_count++] = (Entity){

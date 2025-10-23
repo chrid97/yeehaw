@@ -58,6 +58,8 @@ typedef struct {
   float parry_duration;
   bool pending_shot;
 
+  float fade_timer;
+
   Color color;
 } Entity;
 
@@ -90,6 +92,9 @@ typedef struct {
   // map stuff
   Vector2 map_end;
 
+  float hitstop_timer;
+  Vector2 parry_events[10];
+  int parry_events_count;
 } TransientStorage;
 
 // -------------------------------------
@@ -98,9 +103,12 @@ typedef struct {
 typedef struct {
   Texture2D tilesheet;
   Music bg_music;
+
   Sound hit_sound;
   Sound enemy_death_sound;
   Sound player_gunshot;
+  Sound parry_sound;
+
   bool debug_on;
   bool physics_movement;
 } PermanentStorage;

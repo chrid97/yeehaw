@@ -17,6 +17,11 @@ Vector2 isometric_projection(Vector3 pos) {
                    (pos.x + pos.y) * (TILE_SIZE / 4.0f) - pos.z};
 }
 
+Vector2 project_iso(Vector2 pos) {
+  Vector3 v3 = (Vector3){pos.x, pos.y, 0};
+  return isometric_projection(v3);
+}
+
 // Sort pointers in draw_list by on-screen depth
 int compare_entities_for_draw_order(const void *A, const void *B) {
   const Entity *a = *(Entity *const *)A; // note the extra *
