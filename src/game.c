@@ -25,9 +25,11 @@
 // (TODO) Squish player on damage
 // (TODO) Implement shadows
 #include "game.h"
+#include "entity.c"
 #include "platform.h"
 #include "raylib.h"
 #include "raymath.h"
+#include "ui.c"
 #include "util.c"
 #include <assert.h>
 #include <math.h>
@@ -39,98 +41,9 @@
 #include <emscripten/emscripten.h>
 #endif
 
-Color col_dark_gray = {0x21, 0x25, 0x29, 255};  // #212529
-Color col_mauve = {0x61, 0x47, 0x50, 255};      // #614750
-Color col_warm_brown = {0x8C, 0x5C, 0x47, 255}; // #8c5c47
-Color col_tan = {0xB4, 0x7D, 0x58, 255};        // #b47d58
-Color col_sand = {0xD9, 0xB7, 0x7E, 255};       // #d9b77e
-Color col_cream = {0xEA, 0xD9, 0xA7, 255};      // #ead9a7
-
 // Game boundaries
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
-
-// (TODO) cleanup game summary ui code
-typedef struct {
-  Rectangle rect;
-  int number_rows;
-  float padding_x;
-  float gap_y;
-  float header_y_end;
-  int font_size;
-  float scale;
-} PostGameSummary;
-
-void set_flag(Entity *entity, uint32_t flags) { entity->flags |= flags; }
-bool is_set(Entity *entity, uint32_t flags) { return entity->flags & flags; }
-
-void draw_post_game_summary_header(PostGameSummary *summary, float scale) {
-  Rectangle rect = summary->rect;
-  DrawRectangle(rect.x * scale, rect.y * scale, rect.width * scale,
-                rect.height * scale, col_cream);
-
-  float center_x = rect.x + (rect.width / 2.0f);
-  const char *title = "LEVEL COMPLETE";
-  int title_width = MeasureText(title, summary->font_size);
-  DrawText(title, (center_x - (title_width / 2.0f)) * scale,
-           (rect.y + summary->gap_y) * scale, summary->font_size * scale,
-           BLACK);
-
-  float header_y_end = summary->header_y_end;
-  DrawLine(rect.x * scale, header_y_end * scale, (rect.x + rect.width) * scale,
-           header_y_end * scale, BLACK);
-}
-
-void draw_score_breakdown(PostGameSummary *summary, const char *text,
-                          const char *points_text) {
-  float x = summary->rect.x;
-  float y = summary->rect.y;
-  float width = summary->rect.width;
-  int font_size = summary->font_size;
-  float scale = summary->scale;
-
-  summary->number_rows++;
-  y = summary->header_y_end + (summary->gap_y * summary->number_rows);
-
-  DrawText(text, (x + summary->padding_x) * scale, y * scale, 10 * scale,
-           BLACK);
-
-  int points_width = MeasureText(points_text, font_size);
-  DrawText(points_text, (x + width - points_width - summary->padding_x) * scale,
-           y * scale, font_size * scale, BLACK);
-}
-
-Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
-  assert(t->entity_count < MAX_ENTITIES && "Entity overflow!");
-  t->entities[t->entity_count++] = (Entity){
-      .pos = {x, y},
-      .vel = {0, 0},
-      .width = 1,
-      .height = 1,
-      .type = type,
-      .color = WHITE,
-      .angle = 0,
-      .angle_vel = 0,
-      .bank_angle = 0,
-      .current_health = 0,
-      .damage_cooldown = 0,
-      .active = false,
-  };
-
-  return &t->entities[t->entity_count - 1];
-}
-
-Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
-  Entity *projectile = entity_spawn(t, x, y, ENTITY_PROJECTILE);
-  projectile->color = PURPLE;
-  projectile->width = 0.25;
-  projectile->height = 0.25;
-  projectile->vel.x = 0;
-  projectile->vel.y = 25.0f;
-  set_flag(projectile, EntityFlags_IsProjectile);
-
-  return projectile;
-};
 
 bool is_onscreen(Entity *a, Entity *player) {
   if (a->pos.y < player->pos.y - 20 || a->pos.y > player->pos.y + 20) {
@@ -288,13 +201,13 @@ void update_player(TransientStorage *t, float turn_input, bool movement,
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
 
+  // PARRY
   t->player.parry_area = (Rectangle){
       .x = t->player.pos.x - 2.0f,
       .y = t->player.pos.y - 3.5f,
       .width = 4.0f,
       .height = 1.5f,
   };
-
   bool parried = false;
 
   if (t->player.is_firing && t->player.parry_duration <= 0.0f) {
@@ -520,12 +433,9 @@ void update(Memory *memory) {
 
   float dt = GetFrameTime();
   // --- Input ---
-
   if (IsKeyPressed(KEY_SPACE)) {
     t->player.is_firing = true;
   }
-
-  // t->player.is_firing = IsKeyDown(KEY_SPACE);
 
   if (IsKeyPressed(KEY_ONE)) {
     p->physics_movement = !p->physics_movement;
