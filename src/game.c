@@ -189,7 +189,6 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     t->player.vel.x *= 0.75f;
   }
   t->player.pos.x += t->player.vel.x * dt;
-  t->player.pos.x += (turn_input * t->player.vel.x) * dt;
 
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
@@ -206,8 +205,8 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
       .height = 2.0f,
   };
 
-  bool is_parried = false;
-  if (t->player.parry_window_timer >= 0) {
+  bool parry_count = 0;
+  if (t->player.parry_window_timer > 0) {
     t->player.parry_window_timer = fmaxf(0, t->player.parry_window_timer - dt);
     for (int i = 0; i < t->entity_count; i++) {
       Entity *entity = &t->entities[i];
@@ -223,7 +222,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
         continue;
 
       entity->parry_processed = true;
-      is_parried = true;
+      parry_count++;
 
       Vector2 entity_center = get_rect_center(entity_rect);
       Vector2 player_center = get_rect_center(rect_from_entity(&t->player));
@@ -248,7 +247,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     }
   }
 
-  if (t->player.is_firing && !is_parried) {
+  if (t->player.is_firing && parry_count == 0) {
     Entity *projectile =
         entity_projectile_spawn(t, t->player.pos.x, t->player.pos.y);
     projectile->pos.y -= projectile->height;
@@ -519,7 +518,6 @@ void update(Memory *memory) {
             .flags = 0,
             .height = 0.1f,
         };
-        print_vector2(particle.pos);
         add_entity(t, particle);
       }
     }
