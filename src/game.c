@@ -1,8 +1,8 @@
 // ------------- GUN TODO ----------------
 // (TODO) destroy bullets when they fly off the top of the screen
-// (TODO) if a ritchoetd bullet kills an enemy it should ritochet again to the
+// (TODO) if a ricochet bullet kills an enemy it should ricochet again to the
 // nearest enemy if its within certain tiles or soemthing or myabe it can
-// ritchoet off another close bullet
+// ricochet off another close bullet
 // maybe bullets should shoot at an angle when I'm moving sideways?
 //
 // AMMO / RELOAD
@@ -102,7 +102,7 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->player.current_health = 3;
   t->player.max_health = 3;
   t->player.vel = (Vector2){0, 7.2};
-  t->player.parry_duration = 0;
+  t->player.parry_window_timer = 0;
 
   t->camera.zoom = 1.0f;
 
@@ -130,7 +130,6 @@ void update_timers(TransientStorage *t) {
     t->player.color = WHITE;
   }
 
-  // (TODO) shaking stopped working at some point gotta fix
   if (t->shake_timer > 0) {
     t->shake_timer -= FIXED_DT;
   }
@@ -142,6 +141,7 @@ void update_timers(TransientStorage *t) {
   }
 }
 
+// (NOTE) maybe rename to move_entities?
 void update_entity_movement(TransientStorage *t) {
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
@@ -164,121 +164,108 @@ void update_entity_movement(TransientStorage *t) {
   }
 }
 
-void update_player(TransientStorage *t, float turn_input, bool movement,
-                   PermanentStorage *p) {
+void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   float dt = FIXED_DT;
-  // --- Player Movement ---
-  if (!movement) {
-    float turn_speed = 540.0f;
-    float turn_drag = 50.0f;
-    float target_angle = 45.0f * turn_input;
-    float angle_accel = (target_angle - t->player.angle) * turn_speed;
-    t->player.angle_vel += angle_accel * dt;
-    t->player.angle_vel -= t->player.angle_vel * turn_drag * dt;
-    t->player.angle += t->player.angle_vel * dt;
-    Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
-                       sinf((t->player.angle - 90.0f) * DEG2RAD)};
-    float accel_strength = 325.0f;
-    float drag = 25.0f;
+  // --- Player Movement -----------------------------------
+  float turn_speed = 540.0f;
+  float turn_drag = 50.0f;
+  float target_angle = 45.0f * turn_input;
+  float angle_accel = (target_angle - t->player.angle) * turn_speed;
+  t->player.angle_vel += angle_accel * dt;
+  t->player.angle_vel -= t->player.angle_vel * turn_drag * dt;
+  t->player.angle += t->player.angle_vel * dt;
+  Vector2 forward = {cosf((t->player.angle - 90.0f) * DEG2RAD),
+                     sinf((t->player.angle - 90.0f) * DEG2RAD)};
+  float accel_strength = 325.0f;
+  float drag = 25.0f;
 
-    Vector2 accel = {forward.x * accel_strength, 0};
-    t->player.vel.x += accel.x * dt;
-    t->player.vel.x -= t->player.vel.x * drag * dt;
+  Vector2 accel = {forward.x * accel_strength, 0};
+  t->player.vel.x += accel.x * dt;
+  t->player.vel.x -= t->player.vel.x * drag * dt;
 
-    // direction-flip damping
-    if ((turn_input > 0 && t->player.vel.x < 0) ||
-        (turn_input < 0 && t->player.vel.x > 0)) {
-      t->player.vel.x *= 0.75f;
-    }
-    t->player.pos.x += t->player.vel.x * dt;
-  } else {
-    t->player.pos.x += (turn_input * t->player.vel.x) * dt;
+  // direction-flip damping
+  if ((turn_input > 0 && t->player.vel.x < 0) ||
+      (turn_input < 0 && t->player.vel.x > 0)) {
+    t->player.vel.x *= 0.75f;
   }
+  t->player.pos.x += t->player.vel.x * dt;
+  t->player.pos.x += (turn_input * t->player.vel.x) * dt;
 
-  t->player.pos.y -= t->player.vel.y * dt;
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
+  t->player.pos.y -= t->player.vel.y * dt;
 
-  // PARRY
+  // ------ PARRY & SHOOTING ----------------------------------------------
+  // (NOTE) we parry bullets from behind too, should probably turn that off
+  // (NOTE) Maybe i should make the bullet collision box bigger than the visual
   t->player.parry_area = (Rectangle){
       .x = t->player.pos.x - 2.0f,
-      .y = t->player.pos.y - 3.5f,
+      .y = t->player.pos.y - 4.0f,
       .width = 4.0f,
-      .height = 1.5f,
+      .height = 2.0f,
   };
-  bool parried = false;
 
-  if (t->player.is_firing && t->player.parry_duration <= 0.0f) {
-    t->player.parry_duration = 0.2f;
-    t->player.pending_shot = true;
-  }
-
-  if (t->player.parry_duration > 0.0f) {
-    t->player.parry_duration -= FIXED_DT;
-
+  bool is_parried = false;
+  if (t->player.parry_window_timer >= 0) {
+    t->player.parry_window_timer = fmaxf(0, t->player.parry_window_timer - dt);
     for (int i = 0; i < t->entity_count; i++) {
-      Entity *a = &t->entities[i];
-      if (!is_set(a, EntityFlags_IsProjectile) ||
-          is_set(a, EntityFlags_IsPlayer))
+      Entity *entity = &t->entities[i];
+
+      // Skip non-projectiles entities and skip player projectiles
+      if (entity->type != ENTITY_PROJECTILE ||
+          is_set(entity, EntityFlags_IsPlayer) || entity->parry_processed)
         continue;
 
-      Rectangle parry = t->player.parry_area;
-      Rectangle entity_rect = {a->pos.x, a->pos.y, a->width, a->height};
-
-      if (a->parry_detected)
+      // Skip projectiles outside the detection cone
+      Rectangle entity_rect = rect_from_entity(entity);
+      if (!CheckCollisionRecs(entity_rect, t->player.parry_area))
         continue;
 
-      if (!CheckCollisionRecs(parry, entity_rect))
-        continue;
+      entity->parry_processed = true;
+      is_parried = true;
 
-      t->parry_events[t->parry_events_count++] = a->pos;
-      // printf("%i", t->parry_events_count);
+      Vector2 entity_center = get_rect_center(entity_rect);
+      Vector2 player_center = get_rect_center(rect_from_entity(&t->player));
 
-      a->parry_detected = true;
-      parried = true;
-
-      float lead_time = 0.1f;
-      Vector2 predicted = Vector2Add(a->pos, Vector2Scale(a->vel, lead_time));
-      Vector2 dir_to_predicted =
-          Vector2Normalize(Vector2Subtract(predicted, t->player.pos));
-
-      float spawn_offset = 0.2f;
-      Vector2 spawn_pos = Vector2Add(
-          t->player.pos, Vector2Scale(dir_to_predicted, spawn_offset));
-
-      PlaySound(p->player_gunshot);
-      Entity *projectile = entity_projectile_spawn(t, spawn_pos.x, spawn_pos.y);
-      projectile->vel = Vector2Scale(dir_to_predicted, projectile->vel.y);
+      // Direction from player to projectile
+      Vector2 detected_location = Vector2Subtract(player_center, entity_center);
+      Entity *projectile =
+          entity_projectile_spawn(t, t->player.pos.x, t->player.pos.y);
+      projectile->pos.y -= projectile->height;
+      projectile->pos.x += projectile->width / 5.0f;
       projectile->color = WHITE;
-      set_flag(projectile, EntityFlags_IsPlayer);
-    }
 
-    if (!parried && t->player.parry_duration <= 0.0f &&
-        t->player.pending_shot) {
+      Vector2 detected_location_direction = Vector2Normalize(detected_location);
+      float speed = Vector2Length(projectile->vel);
+      projectile->vel = Vector2Scale(detected_location_direction, speed);
+      // (NOTE) this Vector2Negate only works because the player is only ever
+      // moving and only shoots from one direction but maybe this is worth
+      // changing to using the players direction
+      projectile->vel = Vector2Negate(projectile->vel);
+      set_flag(projectile, EntityFlags_IsPlayer);
       PlaySound(p->player_gunshot);
-      float x = t->player.pos.x - 0.2f;
-      float y = t->player.pos.y - 0.2f;
-      Entity *projectile = entity_projectile_spawn(t, x, y);
-      projectile->vel.y = -projectile->vel.y;
-      projectile->color = WHITE;
-      set_flag(projectile, EntityFlags_IsPlayer);
-      t->player.pending_shot = false;
-    }
-
-    if (parried) {
-      t->player.pending_shot = false;
-
-      // t->hitstop_timer = 0.05f;
-      t->hitstop_timer = 0.07f;
-      // (TODO) need to a figure a better way to shake during hitstop
-      // t->shake_timer = 1.05f;
-      t->player.color = GOLD;
-      PlaySound(p->parry_sound);
     }
   }
 
-  t->player.weapon_cooldown = 0.5f;
+  if (t->player.is_firing && !is_parried) {
+    Entity *projectile =
+        entity_projectile_spawn(t, t->player.pos.x, t->player.pos.y);
+    projectile->pos.y -= projectile->height;
+    projectile->pos.x += projectile->width / 5.0f;
+
+    // (NOTE) I guess I don't need to negate the velocity for the player if each
+    // entity had a facing_direction.
+    projectile->vel.y = -projectile->vel.y;
+    projectile->color = WHITE;
+
+    // i should probably not have to specify that the bullet is owned by the
+    // player to ignore it for ricochet
+    PlaySound(p->player_gunshot);
+    set_flag(projectile, EntityFlags_IsPlayer);
+    t->player.weapon_cooldown = 0.5f;
+  }
+
   t->player.is_firing = false;
 }
 
@@ -338,6 +325,9 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
           a->vel.y = -a->vel.y;
           a->vel.x = -a->vel.x;
 
+          // (NOTE)instead of turning it gold here I should have a flag that
+          // determines whether or not a proejctile has been deflected then
+          // handle it in rendre
           a->color = GOLD;
 
           // store location of collision for particles and sound
@@ -452,11 +442,10 @@ void update(Memory *memory) {
   float dt = GetFrameTime();
   // --- Input ---
   if (IsKeyPressed(KEY_SPACE)) {
-    t->player.is_firing = true;
-  }
-
-  if (IsKeyPressed(KEY_ONE)) {
-    p->physics_movement = !p->physics_movement;
+    if (t->player.weapon_cooldown <= 0) {
+      t->player.is_firing = true;
+      t->player.parry_window_timer = FIXED_DT * 4;
+    }
   }
 
   if (IsKeyPressed(KEY_P)) {
@@ -508,7 +497,7 @@ void update(Memory *memory) {
     }
 
     update_timers(t);
-    update_player(t, turn_input, p->physics_movement, p);
+    update_player(t, turn_input, p);
     update_entities(memory);
     update_entity_movement(t);
     resolve_collisions(t, p);
@@ -664,8 +653,6 @@ void render(Memory *gs) {
     if (p->debug_on && entity->type != ENTITY_PROJECTILE) {
       draw_entity_collision_box(entity);
       DrawPlayerDebug(&t->player);
-      DrawRectangleLines(entity->pos.x, entity->pos.y, entity->width,
-                         entity->height, BLACK);
 
       // parry hitbox
       if (entity->type == ENTITY_PLAYER) {
@@ -684,7 +671,7 @@ void render(Memory *gs) {
         DrawLineV(p3, p4, c);
         DrawLineV(p4, p1, c);
 
-        if (t->player.parry_duration > 0) {
+        if (t->player.parry_window_timer > 0) {
           Color fill = (Color){255, 0, 0, 120};
           DrawTriangle(p1, p3, p2, fill);
           DrawTriangle(p1, p4, p3, fill);
@@ -706,6 +693,7 @@ void render(Memory *gs) {
   // we'd only have to update these on screen resize
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
+  // t->camera.zoom = 3;
   t->camera.zoom = fminf(scale_x, scale_y);
   float scale = fminf(scale_x, scale_y);
 

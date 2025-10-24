@@ -141,3 +141,7 @@ void draw_entity_collision_box(Entity *entity) {
 static inline void print_vector2(Vector2 v) {
   printf("(x: %f, y: %f)\n", v.x, v.y);
 }
+
+Vector2 get_rect_center(Rectangle rect) {
+  return (Vector2){rect.x - (rect.width / 2.0f), rect.y - (rect.height / 2.0f)};
+}

@@ -42,3 +42,12 @@ Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
 
   return projectile;
 };
+
+Rectangle rect_from_entity(Entity *entity) {
+  return (Rectangle){
+      .x = entity->pos.x,
+      .y = entity->pos.y,
+      .width = entity->width,
+      .height = entity->height,
+  };
+}

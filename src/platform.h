@@ -53,10 +53,9 @@ typedef struct {
   float weapon_cooldown;
   bool is_firing;
 
-  bool parry_detected;
+  bool parry_processed;
   Rectangle parry_area;
-  float parry_duration;
-  bool pending_shot;
+  float parry_window_timer;
 
   float fade_timer;
 
@@ -110,7 +109,6 @@ typedef struct {
   Sound parry_sound;
 
   bool debug_on;
-  bool physics_movement;
 } PermanentStorage;
 
 typedef struct {
