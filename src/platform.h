@@ -31,12 +31,13 @@ typedef enum {
   EntityFlags_IsDestructable = (1 << 0),
   EntityFlags_IsProjectile = (1 << 1),
   EntityFlags_IsPlayer = (1 << 2),
+  // or myabe pending_destroy?
+  EntityFlags_Destroyed = (1 << 3),
 } EntityFlags;
 
 typedef struct {
   EntityType type;
   uint32_t flags;
-  bool active;
 
   float height;
   float width;

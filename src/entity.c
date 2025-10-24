@@ -25,7 +25,6 @@ Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
       .bank_angle = 0,
       .current_health = 0,
       .damage_cooldown = 0,
-      .active = false,
   };
 
   return &t->entities[t->entity_count - 1];

@@ -15,6 +15,7 @@
 // (TODO) Make input state machine
 // (TODO) auto generate compile_commands.json
 //
+// (TODO) Create InputState
 // (MAYBE) in hades you can get extra lives, maybe you can do the same thing
 // here but playign with fewer lives gives you some bonus. Myabe a score bonus?
 // This way you can play through the game on easy mode if you want but if youre
@@ -44,7 +45,7 @@ int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
 
 bool is_onscreen(Entity *a, Entity *player) {
-  if (a->pos.y < player->pos.y - 20 || a->pos.y > player->pos.y + 20) {
+  if (a->pos.y < player->pos.y - 25 || a->pos.y > player->pos.y + 25) {
     return false;
   }
   return true;
@@ -91,7 +92,6 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   for (int i = 0; i < MAX_ENTITIES; i++) {
     t->entities[i].pos = (Vector2){9999.0f, 9999.0f};
     t->entities[i].type = ENTITY_NONE;
-    t->entities[i].active = false;
   }
 
   // Initialize player
@@ -148,7 +148,6 @@ void update_entity_movement(TransientStorage *t) {
     switch (entity->type) {
     case ENTITY_GUNMEN: {
     } break;
-
     case ENTITY_PROJECTILE: {
       entity->pos.y += entity->vel.y * FIXED_DT;
       entity->pos.x += entity->vel.x * FIXED_DT;
@@ -198,6 +197,11 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   // ------ PARRY & SHOOTING ----------------------------------------------
   // (NOTE) we parry bullets from behind too, should probably turn that off
   // (NOTE) Maybe i should make the bullet collision box bigger than the visual
+  // TODO fix shooing twice when parrying - i think the bullet fires because
+  // theres no entity in the box but then the next frame we're still checking if
+  // anythings in the box and there is so we spawn an additonal bullet or maybe
+  // the original bullet isnt being destroyed in collision
+  // (TODO) maybe predict trajectory of enemy bullet then fire where it will be
   t->player.parry_area = (Rectangle){
       .x = t->player.pos.x - 2.0f,
       .y = t->player.pos.y - 4.0f,
@@ -297,26 +301,25 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
   // Entity-entity collision
   for (int i = 0; i < t->entity_count; i++) {
     Entity *a = &t->entities[i];
-    if (a->type == ENTITY_NONE || !a->active) {
+    if (a->type == ENTITY_NONE)
       continue;
-    }
 
-    if (a->pos.y < t->player.pos.y - 40 || a->pos.y > t->player.pos.y + 20) {
+    if (!is_onscreen(a, &t->player))
       continue;
-    }
+
     Rectangle a_rect = {a->pos.x, a->pos.y, a->width, a->height};
     for (int j = i + 1; j < t->entity_count; j++) {
       Entity *b = &t->entities[j];
       Rectangle b_rect = {b->pos.x, b->pos.y, b->width, b->height};
 
-      if (a->type == ENTITY_PARTICLE || b->type == ENTITY_PARTICLE) {
+      if (a->type == ENTITY_PARTICLE || b->type == ENTITY_PARTICLE)
         continue;
-      }
 
-      if (!CheckCollisionRecs(a_rect, b_rect)) {
+      if (!CheckCollisionRecs(a_rect, b_rect))
         continue;
-      }
 
+      // (TODO)When two the player proejctile collides with the enemy projectile
+      // it should explode in sparks or be shot off sideways
       if (is_set(a, EntityFlags_IsProjectile) &&
           is_set(b, EntityFlags_IsProjectile)) {
 
@@ -379,24 +382,8 @@ void update_entities(Memory *memory) {
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
 
-    // TODO Destroy offscreen bullets
-
-    if (is_onscreen(entity, &t->player)) {
-      entity->active = true;
-    }
-
-    // skip all updates on inactive entities
-    if (!entity->active) {
+    if (!is_onscreen(entity, &t->player))
       continue;
-    }
-
-    // (NOTE) maybe I don't have to mark offscreen entities
-    // for destruction it's not like i'm replacing them, i
-    // dont plan for this to be an infinite runner anymore.
-    // Oh but I do want to mark bullets for destruction
-    if (entity->pos.y > t->player.pos.y + 25) {
-      entity->type = ENTITY_NONE;
-    }
 
     switch (entity->type) {
     case ENTITY_GUNMEN: {
@@ -509,7 +496,6 @@ void update(Memory *memory) {
         Vector2 dir = {cosf(angle), sinf(angle)};
         Entity particle = {
             .type = ENTITY_PARTICLE,
-            .active = false,
             .pos = *event,
             .vel = Vector2Scale(dir, 5.0f + (rand() % 3)),
             .fade_timer = 0.5f,
