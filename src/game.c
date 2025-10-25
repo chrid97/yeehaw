@@ -66,12 +66,13 @@ void load_map(TransientStorage *t, const char *path) {
       if (c == '^') {
         Entity *entity =
             entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_HAZARD);
+        set_flag(entity, EntityFlags_NotDestructable);
       }
       if (c == 'x') {
 
         Entity *entity =
             entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_GUNMEN);
-        set_flag(entity, EntityFlags_IsDestructable);
+        set_flag(entity, EntityFlags_Destructable);
       }
       if (c == '1') {
         t->map_end = (Vector2){0, y};
@@ -192,7 +193,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
-  t->player.pos.y -= t->player.vel.y * dt;
+  // t->player.pos.y -= t->player.vel.y * dt;
 
   // ------ PARRY & SHOOTING ----------------------------------------------
   // (NOTE) we parry bullets from behind too, should probably turn that off
@@ -204,12 +205,13 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   // (TODO) maybe predict trajectory of enemy bullet then fire where it will be
   t->player.parry_area = (Rectangle){
       .x = t->player.pos.x - 2.0f,
-      .y = t->player.pos.y - 4.0f,
+      .y = t->player.pos.y - 5.0f,
       .width = 4.0f,
       .height = 2.0f,
   };
 
   bool parry_count = 0;
+  // if (true) {
   if (t->player.parry_window_timer > 0) {
     t->player.parry_window_timer = fmaxf(0, t->player.parry_window_timer - dt);
     for (int i = 0; i < t->entity_count; i++) {
@@ -217,7 +219,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
 
       // Skip non-projectiles entities and skip player projectiles
       if (entity->type != ENTITY_PROJECTILE ||
-          is_set(entity, EntityFlags_IsPlayer) || entity->parry_processed)
+          is_set(entity, EntityFlags_Player) || entity->parry_processed)
         continue;
 
       // Skip projectiles outside the detection cone
@@ -237,7 +239,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
           entity_projectile_spawn(t, t->player.pos.x, t->player.pos.y);
       projectile->pos.y -= projectile->height;
       projectile->pos.x += projectile->width / 5.0f;
-      projectile->color = WHITE;
+      projectile->color = GREEN;
 
       Vector2 detected_location_direction = Vector2Normalize(detected_location);
       float speed = Vector2Length(projectile->vel);
@@ -246,7 +248,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
       // moving and only shoots from one direction but maybe this is worth
       // changing to using the players direction
       projectile->vel = Vector2Negate(projectile->vel);
-      set_flag(projectile, EntityFlags_IsPlayer);
+      set_flag(projectile, EntityFlags_Player);
       PlaySound(p->player_gunshot);
     }
   }
@@ -265,7 +267,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     // i should probably not have to specify that the bullet is owned by the
     // player to ignore it for ricochet
     PlaySound(p->player_gunshot);
-    set_flag(projectile, EntityFlags_IsPlayer);
+    set_flag(projectile, EntityFlags_Player);
     t->player.weapon_cooldown = 0.5f;
   }
 
@@ -283,9 +285,7 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
       continue;
     }
 
-    Rectangle entity_rect = {entity->pos.x, entity->pos.y, entity->width,
-                             entity->height};
-    if (CheckCollisionRecs(player_rect, entity_rect) &&
+    if (CheckCollisionRecs(player_rect, rect_from_entity(entity)) &&
         t->player.damage_cooldown <= 0) {
       PlaySound(p->hit_sound);
       t->player.current_health--;
@@ -293,7 +293,7 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
       t->shake_timer = 0.5f;
 
       if (entity->type == ENTITY_PROJECTILE) {
-        entity->type = ENTITY_NONE;
+        set_flag(entity, EntityFlags_Deleted);
       }
     }
   }
@@ -301,75 +301,54 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
   // Entity-entity collision
   for (int i = 0; i < t->entity_count; i++) {
     Entity *a = &t->entities[i];
-    if (a->type == ENTITY_NONE)
+    if (a->type == ENTITY_NONE || is_set(a, EntityFlags_Deleted))
       continue;
 
     if (!is_onscreen(a, &t->player))
       continue;
 
-    Rectangle a_rect = {a->pos.x, a->pos.y, a->width, a->height};
     for (int j = i + 1; j < t->entity_count; j++) {
       Entity *b = &t->entities[j];
-      Rectangle b_rect = {b->pos.x, b->pos.y, b->width, b->height};
-
-      if (a->type == ENTITY_PARTICLE || b->type == ENTITY_PARTICLE)
+      if (b->type == ENTITY_NONE || is_set(b, EntityFlags_Deleted))
         continue;
 
-      if (!CheckCollisionRecs(a_rect, b_rect))
+      if (!CheckCollisionRecs(rect_from_entity(a), rect_from_entity(b)))
         continue;
 
-      // (TODO)When two the player proejctile collides with the enemy projectile
-      // it should explode in sparks or be shot off sideways
-      if (is_set(a, EntityFlags_IsProjectile) &&
-          is_set(b, EntityFlags_IsProjectile)) {
+      if (is_set(a, EntityFlags_Projectile) &&
+          is_set(b, EntityFlags_Projectile)) {
 
-        if (!is_set(a, EntityFlags_IsPlayer)) {
-          a->vel.y = -a->vel.y;
-          a->vel.x = -a->vel.x;
-
-          // (NOTE)instead of turning it gold here I should have a flag that
-          // determines whether or not a proejctile has been deflected then
-          // handle it in rendre
-          a->color = GOLD;
-
-          // store location of collision for particles and sound
-          //  CollisionEvent
-
-          // move it slightly along new direction so it
-          // doesn't overlap again
-          a->pos.y += a->vel.y * FIXED_DT;
-          b->type = ENTITY_NONE;
-        }
-        if (!is_set(b, EntityFlags_IsPlayer)) {
-          b->vel.y = -b->vel.y;
-          b->vel.x = -b->vel.x;
-
+        if (is_set(a, EntityFlags_Player)) {
+          delete_entity(a);
+          b->vel = Vector2Negate(b->vel);
           b->color = GOLD;
           b->pos.y += b->vel.y * FIXED_DT;
-          a->type = ENTITY_NONE;
+        } else if (is_set(b, EntityFlags_Player)) {
+          delete_entity(b);
+          a->vel = Vector2Negate(a->vel);
+          a->color = GOLD;
+          a->pos.y += a->vel.y * FIXED_DT;
+        } else {
+          delete_entity(a);
+          delete_entity(b);
         }
-      } else if (is_set(a, EntityFlags_IsProjectile)) {
-        a->type = ENTITY_NONE;
-      } else if (is_set(b, EntityFlags_IsProjectile)) {
-        b->type = ENTITY_NONE;
+        continue;
       }
 
-      if (is_set(a, EntityFlags_IsDestructable)) {
+      if (is_set(a, EntityFlags_Destructable)) {
         if (a->type == ENTITY_GUNMEN) {
-          b->color = WHITE;
           PlaySound(p->enemy_death_sound);
           t->enemies_killed++;
         }
-        a->type = ENTITY_NONE;
+        delete_entity(a);
+        delete_entity(b);
+        continue;
       }
 
-      if (is_set(b, EntityFlags_IsDestructable)) {
-        if (b->type == ENTITY_GUNMEN) {
-          b->color = WHITE;
-          PlaySound(p->enemy_death_sound);
-          t->enemies_killed++;
-        }
-        b->type = ENTITY_NONE;
+      if (is_set(a, EntityFlags_NotDestructable) &&
+          is_set(b, EntityFlags_Projectile)) {
+        delete_entity(b);
+        continue;
       }
     }
   }
@@ -519,6 +498,13 @@ void update(Memory *memory) {
       float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
       float shake_magnitude = 10.0f;
       t->camera.target.x += offset_x * shake_magnitude;
+    }
+
+    for (int i = 0; i < t->entity_count; i++) {
+      Entity *entity = &t->entities[i];
+      if (is_set(entity, EntityFlags_Deleted)) {
+        entity->type = ENTITY_NONE;
+      }
     }
     compact_entities(t);
 

@@ -5,6 +5,8 @@
 
 void set_flag(Entity *entity, uint32_t flags) { entity->flags |= flags; }
 bool is_set(Entity *entity, uint32_t flags) { return entity->flags & flags; }
+/// Mark Entity for deletion
+void delete_entity(Entity *entity) { set_flag(entity, EntityFlags_Deleted); }
 
 void add_entity(TransientStorage *t, Entity entity) {
   assert(t->entity_count < MAX_ENTITIES && "Entity overflow!");
@@ -37,7 +39,7 @@ Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
   projectile->height = 0.25;
   projectile->vel.x = 0;
   projectile->vel.y = 25.0f;
-  set_flag(projectile, EntityFlags_IsProjectile);
+  set_flag(projectile, EntityFlags_Projectile);
 
   return projectile;
 };
