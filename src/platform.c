@@ -47,6 +47,7 @@ int main(void) {
   InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
   // InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
   SetTargetFPS(0);
+
   InitAudioDevice();
   srand((unsigned int)time(NULL));
   load_assets(&memory.permanent);

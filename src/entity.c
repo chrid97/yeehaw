@@ -34,7 +34,7 @@ Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
 
 Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
   Entity *projectile = entity_spawn(t, x, y, ENTITY_PROJECTILE);
-  projectile->color = PURPLE;
+  projectile->color = BLACK;
   projectile->width = 0.25;
   projectile->height = 0.25;
   projectile->vel.x = 0;

@@ -44,6 +44,14 @@
 int PLAY_AREA_START = -5;
 int PLAY_AREA_END = 8;
 
+Vector2 cursor_pos;
+
+Vector2 screen_to_iso(Vector2 screen) {
+  float a = screen.x / (TILE_SIZE / 2.0f);
+  float b = screen.y / (TILE_SIZE / 4.0f);
+  return (Vector2){(a + b) / 2.0f, (b - a) / 2.0f};
+}
+
 bool is_onscreen(Entity *a, Entity *player) {
   if (a->pos.y < player->pos.y - 25 || a->pos.y > player->pos.y + 25) {
     return false;
@@ -261,8 +269,29 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
 
     // (NOTE) I guess I don't need to negate the velocity for the player if each
     // entity had a facing_direction.
-    projectile->vel.y = -projectile->vel.y;
+    // projectile->vel = Vector2Negate(projectile->vel);
+    // float speed = Vector2Length(projectile->vel);
+    // Vector2 cursor = project_iso(t->cursor_pos);
+    // projectile->vel = Vector2Scale(cursor, speed);
     projectile->color = WHITE;
+
+    Vector2 mouse_screen = GetMousePosition();
+    Vector2 mouse_world = GetScreenToWorld2D(mouse_screen, t->camera);
+    Vector2 mouse_iso = screen_to_iso(mouse_world);
+
+    printf("Mouse screen: ");
+    print_vector2(mouse_screen);
+    printf("Mouse world : ");
+    print_vector2(mouse_world);
+    printf("Mouse iso   : ");
+    print_vector2(mouse_iso);
+    printf("Player pos  : ");
+    print_vector2(t->player.pos);
+
+    Vector2 dir = Vector2Normalize(Vector2Subtract(t->player.pos, mouse_iso));
+    float speed = Vector2Length(t->player.vel);
+    projectile->vel = Vector2Scale(dir, speed);
+    projectile->vel = Vector2Negate(projectile->vel);
 
     // i should probably not have to specify that the bullet is owned by the
     // player to ignore it for ricochet
@@ -434,6 +463,14 @@ void update(Memory *memory) {
     t->player.pos.y += 7.0f * dt;
   }
 
+  t->cursor_pos = GetMousePosition();
+  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    if (t->player.weapon_cooldown <= 0) {
+      t->player.is_firing = true;
+      t->player.parry_window_timer = FIXED_DT * 2;
+    }
+  }
+
   UpdateMusicStream(p->bg_music);
 
   // Reset on death
@@ -492,6 +529,8 @@ void update(Memory *memory) {
         isometric_projection((Vector3){0, t->player.pos.y, 0});
     t->camera.target = player_screen;
     t->camera.offset =
+        // (TODO) move screenwidth/height to game state or perm storage or
+        // something
         (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
     if (t->shake_timer > 0) {
@@ -537,15 +576,28 @@ void render(Memory *gs) {
 
   int tile_y = floorf(t->player.pos.y);
   Rectangle tile = get_tile_source_rect(tilesheet, 36);
+  Rectangle water_tile = get_tile_source_rect(tilesheet, 120);
+  Rectangle tile2 = get_tile_source_rect(tilesheet, 23);
 
   // --- Draw world ---
   // (NOTE) figure out how to start from 0 instead of a
   // negative number
   for (int y = tile_y - 30; y < tile_y + 14; y++) {
     // Left side
-    for (int x = -21; x < -5; x++) {
+    // for (int x = -21; x < -5; x++) {
+    //   Vector2 screen = isometric_projection((Vector3){x, y, 0});
+    //   DrawTextureRec(p->tilesheet, tile, screen, WHITE);
+    // }
+
+    // Left side
+    for (int x = -21; x < -8; x++) {
       Vector2 screen = isometric_projection((Vector3){x, y, 0});
-      DrawTextureRec(p->tilesheet, tile, screen, WHITE);
+      DrawTextureRec(p->tilesheet, tile2, screen, WHITE);
+    }
+
+    for (int x = -8; x < -5; x++) {
+      Vector2 screen = isometric_projection((Vector3){x, y, 0});
+      DrawTextureRec(p->tilesheet, water_tile, screen, WHITE);
     }
 
     // Play area
@@ -663,7 +715,10 @@ void render(Memory *gs) {
   // we'd only have to update these on screen resize
   float scale_x = (float)GetScreenWidth() / VIRTUAL_WIDTH;
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
-  // t->camera.zoom = 3;
+  // the sim region should be the camera area
+  //
+  // (NOTE) My fps on my macbook goes from 200-400 to 400-500 when i turn camera
+  // zoom off
   t->camera.zoom = fminf(scale_x, scale_y);
   float scale = fminf(scale_x, scale_y);
 
@@ -731,6 +786,10 @@ void render(Memory *gs) {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                   (Color){255, 255, 255, 10});
   }
+
+  DrawCircleLines(t->cursor_pos.x, t->cursor_pos.y, 10, WHITE);
+  DrawCircle(t->cursor_pos.x, t->cursor_pos.y, 2, WHITE);
+  HideCursor();
 
   DrawFPS(0, 0);
   EndDrawing();

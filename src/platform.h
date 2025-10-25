@@ -95,6 +95,9 @@ typedef struct {
   float hitstop_timer;
   Vector2 parry_events[10];
   int parry_events_count;
+
+  //(TOOD) this should maybe be in perm storage
+  Vector2 cursor_pos;
 } TransientStorage;
 
 // -------------------------------------
