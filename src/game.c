@@ -193,7 +193,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
-  // t->player.pos.y -= t->player.vel.y * dt;
+  t->player.pos.y -= t->player.vel.y * dt;
 
   // ------ PARRY & SHOOTING ----------------------------------------------
   // (NOTE) we parry bullets from behind too, should probably turn that off
@@ -409,7 +409,7 @@ void update(Memory *memory) {
   if (IsKeyPressed(KEY_SPACE)) {
     if (t->player.weapon_cooldown <= 0) {
       t->player.is_firing = true;
-      t->player.parry_window_timer = FIXED_DT * 4;
+      t->player.parry_window_timer = FIXED_DT * 2;
     }
   }
 
