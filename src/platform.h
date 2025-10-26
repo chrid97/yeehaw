@@ -51,8 +51,13 @@ typedef struct {
   int max_health;
 
   float damage_cooldown;
+
   float weapon_cooldown;
   bool is_firing;
+  int ammo;
+  int max_ammo;
+  /// How long it takes the player to reload
+  float reload_time;
 
   bool parry_processed;
   Rectangle parry_area;

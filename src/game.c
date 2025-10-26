@@ -112,10 +112,17 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->player.width = 0.35f;
   t->player.height = 0.75f;
   t->player.color = WHITE;
-  t->player.current_health = 3;
-  t->player.max_health = 3;
   t->player.vel = (Vector2){0, 7.2};
   t->player.parry_window_timer = 0;
+
+  // (NOTE)(THINKIN) I feel like I should have soemthing that says fill up to
+  // max ammo/max health so I don't have to remember to assign the current value
+  // to be the same as the max
+  t->player.current_health = 3;
+  t->player.max_health = 3;
+
+  t->player.max_ammo = 6;
+  t->player.ammo = 6;
 
   t->camera.zoom = 1.0f;
 
@@ -134,15 +141,7 @@ void compact_entities(TransientStorage *t) {
 }
 
 void update_timers(TransientStorage *t) {
-  t->player.weapon_cooldown -= FIXED_DT;
   t->game_timer += FIXED_DT;
-  if (t->player.damage_cooldown > 0.0f) {
-    t->player.damage_cooldown -= FIXED_DT;
-    t->player.color = RED;
-  } else {
-    t->player.color = WHITE;
-  }
-
   if (t->shake_timer > 0) {
     t->shake_timer -= FIXED_DT;
   }
@@ -178,6 +177,20 @@ void update_entity_movement(TransientStorage *t) {
 
 void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   float dt = FIXED_DT;
+  // --- Player Timers -----------------------------------
+  t->player.reload_time = fmaxf(t->player.reload_time - FIXED_DT, 0);
+  // (NOTE) theres probably a better way to know we've finished reloading
+  if (t->player.reload_time == 0 && t->player.ammo == 0) {
+    t->player.ammo = t->player.max_ammo;
+  }
+  t->player.weapon_cooldown = fmaxf(t->player.weapon_cooldown - FIXED_DT, 0);
+  if (t->player.damage_cooldown > 0.0f) {
+    t->player.damage_cooldown -= FIXED_DT;
+    t->player.color = RED;
+  } else {
+    t->player.color = WHITE;
+  }
+
   // --- Player Movement -----------------------------------
   float turn_speed = 540.0f;
   float turn_drag = 50.0f;
@@ -265,7 +278,9 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     }
   }
 
-  if (t->player.is_firing && parry_count == 0) {
+  bool is_reloading = (t->player.reload_time > 0);
+  if (t->player.is_firing && parry_count == 0 && !is_reloading &&
+      t->player.weapon_cooldown <= 0) {
     Entity *projectile =
         entity_projectile_spawn(t, t->player.pos.x, t->player.pos.y);
     projectile->pos.y -= projectile->height;
@@ -298,7 +313,12 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     // player to ignore it for ricochet
     PlaySound(p->player_gunshot);
     set_flag(projectile, EntityFlags_Player);
-    t->player.weapon_cooldown = 0.5f;
+    t->player.weapon_cooldown = 0.125f;
+    t->player.ammo--;
+  }
+
+  if (t->player.ammo == 0 && t->player.reload_time <= 0) {
+    t->player.reload_time = 1.0f;
   }
 
   t->player.is_firing = false;
@@ -791,6 +811,14 @@ void render(Memory *gs) {
   DrawCircleLines(t->cursor_pos.x, t->cursor_pos.y, 10, WHITE);
   DrawCircle(t->cursor_pos.x, t->cursor_pos.y, 2, WHITE);
   HideCursor();
+
+  int remaining_ammo_font_size = 30 * scale;
+  const char *remaining_ammo =
+      TextFormat("%i / %i", t->player.ammo, t->player.max_ammo);
+  float ammo_width = MeasureText(remaining_ammo, remaining_ammo_font_size);
+  DrawText(remaining_ammo, GetScreenWidth() - (ammo_width),
+           GetScreenHeight() - remaining_ammo_font_size,
+           remaining_ammo_font_size, WHITE);
 
   DrawFPS(0, 0);
   EndDrawing();
