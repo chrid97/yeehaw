@@ -1,18 +1,17 @@
+// (TODO) I think everything in my game moves faster diagnolly
+//
 // ------------- GUN TODO ----------------
 // (TODO) destroy bullets when they fly off the top of the screen
 // (TODO) if a ricochet bullet kills an enemy it should ricochet again to the
 // nearest enemy if its within certain tiles or soemthing or myabe it can
 // ricochet off another close bullet
-// maybe bullets should shoot at an angle when I'm moving sideways?
 //
 // AMMO / RELOAD
 //
 // ---------- MECHANICS TODO -------------
 // SPRITNING / STAMINA
 //
-// (TODO) Destroy entities not on screen
 // (TODO) Move to units for time and world pos
-// (TODO) Make input state machine
 // (TODO) auto generate compile_commands.json
 //
 // (TODO) Create InputState
@@ -21,8 +20,13 @@
 // This way you can play through the game on easy mode if you want but if youre
 // chasing a higher score you have an incentive to play with fewer lives
 // (TODO) Fix drawing background/world
-// (TODO) Squish player on damage
+// ---------- VISUAL TODO -------------
+// (TODO) Lighting
 // (TODO) Implement shadows
+// (TODO) Squish player on damage
+//
+//
+// -------------------------------------
 #include "game.h"
 #include "entity.c"
 #include "platform.h"
@@ -279,19 +283,16 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     Vector2 mouse_world = GetScreenToWorld2D(mouse_screen, t->camera);
     Vector2 mouse_iso = screen_to_iso(mouse_world);
 
-    printf("Mouse screen: ");
-    print_vector2(mouse_screen);
-    printf("Mouse world : ");
-    print_vector2(mouse_world);
-    printf("Mouse iso   : ");
-    print_vector2(mouse_iso);
-    printf("Player pos  : ");
-    print_vector2(t->player.pos);
-
     Vector2 dir = Vector2Normalize(Vector2Subtract(t->player.pos, mouse_iso));
-    float speed = Vector2Length(t->player.vel);
+    float speed = Vector2Length(projectile->vel);
+
+    // (TODO) Right when you shoot behind the player it spawns the tnity inside
+    // the player and he takes damage, so either I fix that or i the player
+    // unable to shoot 360 degrees behind themselves
     projectile->vel = Vector2Scale(dir, speed);
     projectile->vel = Vector2Negate(projectile->vel);
+    projectile->pos =
+        Vector2Add(Vector2Scale(projectile->vel, FIXED_DT), projectile->pos);
 
     // i should probably not have to specify that the bullet is owned by the
     // player to ignore it for ricochet
