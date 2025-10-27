@@ -6,7 +6,12 @@
 // nearest enemy if its within certain tiles or soemthing or myabe it can
 // ricochet off another close bullet
 //
-// AMMO / RELOAD
+// (TODO) Add some randomness to shooting bullets
+// (TODO) Add more randomness if you shoot while moving
+// (TODO) Reduce bullet lifetime to like 5 seconds
+//
+// ------------- ENEMIES TODO ----------------
+// (TODO) horse riding enemies
 //
 // ---------- MECHANICS TODO -------------
 // SPRITNING / STAMINA
@@ -81,13 +86,21 @@ void load_map(TransientStorage *t, const char *path) {
         set_flag(entity, EntityFlags_NotDestructable);
       }
       if (c == 'x') {
-
         Entity *entity =
             entity_spawn(t, x + PLAY_AREA_START + 1, y - 20, ENTITY_GUNMEN);
         set_flag(entity, EntityFlags_Destructable);
       }
       if (c == '1') {
         t->map_end = (Vector2){0, y};
+      }
+      if (c == 'h') {
+        Entity *entity = entity_spawn(t, x + PLAY_AREA_START + 1, y - 20,
+                                      ENTITY_HORSE_GUNMEN);
+        entity->vel.y = -8;
+        entity->color = ORANGE;
+        entity->width = 0.35f;
+        entity->height = 0.75f;
+        set_flag(entity, EntityFlags_Destructable);
       }
     }
     y -= 0.5f;
@@ -160,6 +173,10 @@ void update_entity_movement(TransientStorage *t) {
     switch (entity->type) {
     case ENTITY_GUNMEN: {
     } break;
+    case ENTITY_HORSE_GUNMEN: {
+      Vector2 scaled_vel = Vector2Scale(entity->vel, FIXED_DT);
+      entity->pos = Vector2Add(scaled_vel, entity->pos);
+    } break;
     case ENTITY_PROJECTILE: {
       entity->pos.y += entity->vel.y * FIXED_DT;
       entity->pos.x += entity->vel.x * FIXED_DT;
@@ -218,7 +235,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
-  t->player.pos.y -= t->player.vel.y * dt;
+  // t->player.pos.y -= t->player.vel.y * dt;
 
   // ------ PARRY & SHOOTING ----------------------------------------------
   // (NOTE) we parry bullets from behind too, should probably turn that off
@@ -236,7 +253,6 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   };
 
   bool parry_count = 0;
-  // if (true) {
   if (t->player.parry_window_timer > 0) {
     t->player.parry_window_timer = fmaxf(0, t->player.parry_window_timer - dt);
     for (int i = 0; i < t->entity_count; i++) {
@@ -288,10 +304,6 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
 
     // (NOTE) I guess I don't need to negate the velocity for the player if each
     // entity had a facing_direction.
-    // projectile->vel = Vector2Negate(projectile->vel);
-    // float speed = Vector2Length(projectile->vel);
-    // Vector2 cursor = project_iso(t->cursor_pos);
-    // projectile->vel = Vector2Scale(cursor, speed);
     projectile->color = WHITE;
 
     Vector2 mouse_screen = GetMousePosition();
@@ -309,9 +321,9 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     projectile->pos =
         Vector2Add(Vector2Scale(projectile->vel, FIXED_DT), projectile->pos);
 
+    PlaySound(p->player_gunshot);
     // i should probably not have to specify that the bullet is owned by the
     // player to ignore it for ricochet
-    PlaySound(p->player_gunshot);
     set_flag(projectile, EntityFlags_Player);
     t->player.weapon_cooldown = 0.125f;
     t->player.ammo--;
@@ -417,6 +429,52 @@ void update_entities(Memory *memory) {
     switch (entity->type) {
     case ENTITY_GUNMEN: {
       if (entity->weapon_cooldown <= 0) {
+        Vector2 entity_center = {
+            entity->pos.x + entity->width * 0.5f,
+            entity->pos.y + entity->height * 0.5f,
+        };
+        Vector2 player_center = {
+            t->player.pos.x + t->player.width * 0.5f,
+            t->player.pos.y + t->player.height * 0.5f,
+        };
+
+        Vector2 direction =
+            Vector2Normalize(Vector2Subtract(player_center, entity_center));
+        Vector2 spawn_pos = Vector2Add(direction, entity_center);
+        Entity *bullet = entity_projectile_spawn(t, spawn_pos.x, spawn_pos.y);
+
+        bullet->vel = Vector2Scale(direction, bullet->vel.y);
+        entity->weapon_cooldown = 2.5f;
+      }
+    } break;
+    case ENTITY_HORSE_GUNMEN: {
+      // Follow behavior for horse enemies
+      Vector2 target_offset = {1.5, -3.5}; // stay slightly behind the player
+      Vector2 target = Vector2Add(t->player.pos, target_offset);
+      Vector2 to_target = Vector2Subtract(target, entity->pos);
+      float distance = Vector2Length(to_target);
+
+      if (distance > 0.05f) {
+        Vector2 dir = Vector2Normalize(to_target);
+
+        // speed scales with distance (faster when far away)
+        float min_speed = 3.0f;
+        float max_speed = 10.0f;
+        float t_speed = fminf(distance / 5.0f, 1.0f); // smooth ramp up
+        float follow_speed = Lerp(min_speed, max_speed, t_speed);
+
+        entity->vel = Vector2Scale(dir, follow_speed);
+
+        // prevent overlap: stop short of the player
+        if (distance < 0.75f) {
+          entity->vel = (Vector2){0, 0};
+        }
+      } else {
+        // damp to stop jitter
+        entity->vel = Vector2Scale(entity->vel, 0.9f);
+      }
+
+      if (false) {
         Vector2 entity_center = {
             entity->pos.x + entity->width * 0.5f,
             entity->pos.y + entity->height * 0.5f,
@@ -652,7 +710,6 @@ void render(Memory *gs) {
                              t->player.pos.y + t->player.height / 2.0f, 0};
       draw_iso_cube(cube_center, t->player.width, t->player.height, 10.5f,
                     t->player.angle, t->player.color);
-
     } break;
 
     case ENTITY_HAZARD: {
@@ -678,6 +735,13 @@ void render(Memory *gs) {
       Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
       Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
       DrawTexturePro(p->tilesheet, src, dst, origin, 0, RED);
+    } break;
+
+    case ENTITY_HORSE_GUNMEN: {
+      Vector3 cube_center = {entity->pos.x + entity->width / 2.0f,
+                             entity->pos.y + entity->height / 2.0f, 0};
+      draw_iso_cube(cube_center, entity->width, entity->height, 10.5f,
+                    entity->angle, entity->color);
     } break;
 
     case ENTITY_PARTICLE: {

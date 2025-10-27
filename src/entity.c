@@ -42,7 +42,7 @@ Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
   projectile->width = 0.25;
   projectile->height = 0.25;
   projectile->vel.x = 0;
-  projectile->vel.y = 25.0f;
+  projectile->vel.y = 35.0f;
   set_flag(projectile, EntityFlags_Projectile);
 
   return projectile;
