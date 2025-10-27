@@ -12,6 +12,11 @@ int random_between(int min, int max) {
   return min + rand() % (max - min + 1);
 }
 
+float random_betweenf(float min, float max) {
+  float scale = rand() / (float)RAND_MAX;
+  return min + scale * (max - min);
+}
+
 Vector2 isometric_projection(Vector3 pos) {
   return (Vector2){(pos.x - pos.y) * (TILE_SIZE / 2.0f),
                    (pos.x + pos.y) * (TILE_SIZE / 4.0f) - pos.z};
@@ -143,5 +148,5 @@ static inline void print_vector2(Vector2 v) {
 }
 
 Vector2 get_rect_center(Rectangle rect) {
-  return (Vector2){rect.x - (rect.width / 2.0f), rect.y - (rect.height / 2.0f)};
+  return (Vector2){rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f};
 }

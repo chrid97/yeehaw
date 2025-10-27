@@ -289,6 +289,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
       // moving and only shoots from one direction but maybe this is worth
       // changing to using the players direction
       projectile->vel = Vector2Negate(projectile->vel);
+
       set_flag(projectile, EntityFlags_Player);
       PlaySound(p->player_gunshot);
     }
@@ -297,29 +298,34 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   bool is_reloading = (t->player.reload_time > 0);
   if (t->player.is_firing && parry_count == 0 && !is_reloading &&
       t->player.weapon_cooldown <= 0) {
-    Entity *projectile =
-        entity_projectile_spawn(t, t->player.pos.x, t->player.pos.y);
-    projectile->pos.y -= projectile->height;
-    projectile->pos.x += projectile->width / 5.0f;
 
-    // (NOTE) I guess I don't need to negate the velocity for the player if each
-    // entity had a facing_direction.
+    Vector2 player_center = get_rect_center(rect_from_entity(&t->player));
+    Entity *projectile =
+        entity_projectile_spawn(t, player_center.x, player_center.y);
     projectile->color = WHITE;
 
     Vector2 mouse_screen = GetMousePosition();
     Vector2 mouse_world = GetScreenToWorld2D(mouse_screen, t->camera);
     Vector2 mouse_iso = screen_to_iso(mouse_world);
 
-    Vector2 dir = Vector2Normalize(Vector2Subtract(t->player.pos, mouse_iso));
+    Vector2 dir = Vector2Normalize(Vector2Subtract(mouse_iso, t->player.pos));
     float speed = Vector2Length(projectile->vel);
 
-    // (TODO) Right when you shoot behind the player it spawns the tnity inside
-    // the player and he takes damage, so either I fix that or i the player
-    // unable to shoot 360 degrees behind themselves
-    projectile->vel = Vector2Scale(dir, speed);
-    projectile->vel = Vector2Negate(projectile->vel);
-    projectile->pos =
-        Vector2Add(Vector2Scale(projectile->vel, FIXED_DT), projectile->pos);
+    // ADD SPREAD
+    float base_angle = atan2f(dir.y, dir.x);
+    float spread = random_betweenf(-5.0f, 5.0f) * DEG2RAD;
+    float new_angle = base_angle + spread;
+    Vector2 final_dir = {cosf(new_angle), sinf(new_angle)};
+    projectile->vel = Vector2Scale(final_dir, speed);
+
+    // Spawn projectile outside of the players hitbox
+    float player_radius =
+        0.5 * sqrtf(powf(t->player.width, 2) + powf(t->player.height, 2));
+    float projectile_radius =
+        0.5 * sqrtf(powf(projectile->width, 2) + powf(projectile->height, 2));
+    Vector2 spawn_offset =
+        Vector2Scale(final_dir, player_radius + projectile_radius);
+    projectile->pos = Vector2Add(spawn_offset, projectile->pos);
 
     PlaySound(p->player_gunshot);
     // i should probably not have to specify that the bullet is owned by the
@@ -550,7 +556,7 @@ void update(Memory *memory) {
     }
   }
 
-  UpdateMusicStream(p->bg_music);
+  // UpdateMusicStream(p->bg_music);
 
   // Reset on death
   if (t->player.current_health <= 0) {
