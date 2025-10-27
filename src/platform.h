@@ -8,8 +8,13 @@
 #include <stdint.h>
 #define TILE_SIZE 32
 
-#define VIRTUAL_WIDTH 640
-#define VIRTUAL_HEIGHT 360
+// #define VIRTUAL_WIDTH 640
+// #define VIRTUAL_HEIGHT 360
+
+// PLAYING AROUND WITH SMALLER RESOLUTION
+#define VIRTUAL_WIDTH 480
+#define VIRTUAL_HEIGHT 270
+
 #define FIXED_DT (1.0f / 120.0f)
 
 #define MAX_ENTITIES 1000

@@ -39,14 +39,18 @@ Entity *entity_spawn(TransientStorage *t, float x, float y, EntityType type) {
 Entity *entity_projectile_spawn(TransientStorage *t, float x, float y) {
   Entity *projectile = entity_spawn(t, x, y, ENTITY_PROJECTILE);
   projectile->color = BLACK;
-  projectile->width = 0.25;
-  projectile->height = 0.25;
+  projectile->width = 0.25f;
+  projectile->height = 0.25f;
   projectile->vel.x = 0;
   projectile->vel.y = 35.0f;
   set_flag(projectile, EntityFlags_Projectile);
 
+  // center adjustment
+  projectile->pos.x = x - projectile->width * 0.5f;
+  projectile->pos.y = y - projectile->height * 0.5f;
+
   return projectile;
-};
+}
 
 Rectangle rect_from_entity(Entity *entity) {
   return (Rectangle){

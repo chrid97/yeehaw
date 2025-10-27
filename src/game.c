@@ -1,14 +1,8 @@
-// (TODO) I think everything in my game moves faster diagnolly
-//
 // ------------- GUN TODO ----------------
 // (TODO) destroy bullets when they fly off the top of the screen
 // (TODO) if a ricochet bullet kills an enemy it should ricochet again to the
 // nearest enemy if its within certain tiles or soemthing or myabe it can
 // ricochet off another close bullet
-//
-// (TODO) Add some randomness to shooting bullets
-// (TODO) Add more randomness if you shoot while moving
-// (TODO) Reduce bullet lifetime to like 5 seconds
 //
 // ------------- ENEMIES TODO ----------------
 // (TODO) horse riding enemies
@@ -20,10 +14,6 @@
 // (TODO) auto generate compile_commands.json
 //
 // (TODO) Create InputState
-// (MAYBE) in hades you can get extra lives, maybe you can do the same thing
-// here but playign with fewer lives gives you some bonus. Myabe a score bonus?
-// This way you can play through the game on easy mode if you want but if youre
-// chasing a higher score you have an incentive to play with fewer lives
 // (TODO) Fix drawing background/world
 // ---------- VISUAL TODO -------------
 // (TODO) Lighting
@@ -309,13 +299,13 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     Vector2 mouse_iso = screen_to_iso(mouse_world);
 
     Vector2 dir = Vector2Normalize(Vector2Subtract(mouse_iso, t->player.pos));
-    float speed = Vector2Length(projectile->vel);
 
     // ADD SPREAD
     float base_angle = atan2f(dir.y, dir.x);
     float spread = random_betweenf(-5.0f, 5.0f) * DEG2RAD;
     float new_angle = base_angle + spread;
     Vector2 final_dir = {cosf(new_angle), sinf(new_angle)};
+    float speed = Vector2Length(projectile->vel);
     projectile->vel = Vector2Scale(final_dir, speed);
 
     // Spawn projectile outside of the players hitbox
@@ -327,11 +317,13 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
         Vector2Scale(final_dir, player_radius + projectile_radius);
     projectile->pos = Vector2Add(spawn_offset, projectile->pos);
 
+    t->shake_timer = 0.1;
     PlaySound(p->player_gunshot);
+
     // i should probably not have to specify that the bullet is owned by the
     // player to ignore it for ricochet
     set_flag(projectile, EntityFlags_Player);
-    t->player.weapon_cooldown = 0.125f;
+    t->player.weapon_cooldown = 0.225;
     t->player.ammo--;
   }
 
@@ -549,7 +541,7 @@ void update(Memory *memory) {
   }
 
   t->cursor_pos = GetMousePosition();
-  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+  if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
     if (t->player.weapon_cooldown <= 0) {
       t->player.is_firing = true;
       t->player.parry_window_timer = FIXED_DT * 2;
@@ -562,16 +554,6 @@ void update(Memory *memory) {
   if (t->player.current_health <= 0) {
     StopMusicStream(p->bg_music);
     // init_game(t);
-    return;
-  }
-
-  if (t->hitstop_timer > 0) {
-    t->hitstop_timer -= dt;
-    if (t->shake_timer > 0.0f) {
-      t->shake_timer -= FIXED_DT;
-      float offset_x = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-      t->camera.target.x += offset_x * 5.0f;
-    }
     return;
   }
 
@@ -618,10 +600,9 @@ void update(Memory *memory) {
         // something
         (Vector2){GetScreenWidth() / 4.0f, GetScreenHeight() / 1.5f};
 
-    if (t->shake_timer > 0) {
-      float offset_x = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
-      float shake_magnitude = 10.0f;
-      t->camera.target.x += offset_x * shake_magnitude;
+    if (t->shake_timer > 0.0f) {
+      t->camera.target.x += 0.5;
+      t->camera.target.y += 0.5;
     }
 
     for (int i = 0; i < t->entity_count; i++) {
@@ -733,7 +714,6 @@ void render(Memory *gs) {
       float tilt_angle = 0.0f;
       draw_iso_cube(cube_center, entity->width, cube_depth, cube_height,
                     tilt_angle, entity->color);
-
     } break;
 
     case ENTITY_GUNMEN: {
@@ -871,11 +851,6 @@ void render(Memory *gs) {
     game_summary.gap_y += 20;
     draw_score_breakdown(&game_summary, "FINAL SCORE", TextFormat("%i", score));
     draw_score_breakdown(&game_summary, "RANK", "C");
-  }
-
-  if (t->hitstop_timer > 0.0f) {
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  (Color){255, 255, 255, 10});
   }
 
   DrawCircleLines(t->cursor_pos.x, t->cursor_pos.y, 10, WHITE);
