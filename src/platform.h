@@ -71,6 +71,8 @@ typedef struct {
 
   float fade_timer;
 
+  float turn_input;
+
   Color color;
 } Entity;
 

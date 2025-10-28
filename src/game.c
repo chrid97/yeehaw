@@ -19,7 +19,8 @@
 // (TODO) Lighting
 // (TODO) Implement shadows
 // (TODO) Squish player on damage
-//
+// ---------- MISC TODO -------------
+// (TODO) ADD M TO MUTE
 //
 // -------------------------------------
 #include "game.h"
@@ -86,7 +87,8 @@ void load_map(TransientStorage *t, const char *path) {
       if (c == 'h') {
         Entity *entity = entity_spawn(t, x + PLAY_AREA_START + 1, y - 20,
                                       ENTITY_HORSE_GUNMEN);
-        entity->vel.y = -8;
+        // entity->vel = (Vector2){5, 5};
+        // t->player.vel = (Vector2){0, 7.2};
         entity->color = ORANGE;
         entity->width = 0.35f;
         entity->height = 0.75f;
@@ -115,6 +117,8 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->player.width = 0.35f;
   t->player.height = 0.75f;
   t->player.color = WHITE;
+  // (NOTE) I guess the starting velocity of the player doesn't matter since I
+  // update the vel in playermovement
   t->player.vel = (Vector2){0, 7.2};
   t->player.parry_window_timer = 0;
 
@@ -156,7 +160,37 @@ void update_timers(TransientStorage *t) {
   }
 }
 
+void horse_movement(Entity *entity, float turn_input) {
+  float turn_speed = 540.0f;
+  float turn_drag = 50.0f;
+  float target_angle = 45.0f * turn_input;
+  float angle_accel = (target_angle - entity->angle) * turn_speed;
+  entity->angle_vel += angle_accel * FIXED_DT;
+  entity->angle_vel -= entity->angle_vel * turn_drag * FIXED_DT;
+  entity->angle += entity->angle_vel * FIXED_DT;
+  Vector2 forward = {cosf((entity->angle - 90.0f) * DEG2RAD),
+                     sinf((entity->angle - 90.0f) * DEG2RAD)};
+  float accel_strength = 325.0f;
+  float drag = 25.0f;
+
+  Vector2 accel = Vector2Scale(forward, accel_strength);
+  entity->vel = Vector2Add(entity->vel, Vector2Scale(accel, FIXED_DT));
+  entity->vel =
+      Vector2Subtract(entity->vel, Vector2Scale(entity->vel, drag * FIXED_DT));
+
+  // direction-flip damping
+  if ((turn_input > 0 && entity->vel.x < 0) ||
+      (turn_input < 0 && entity->vel.x > 0)) {
+    entity->vel.x *= 0.75f;
+  }
+  // entity->pos.y += entity->vel.y * FIXED_DT;
+  // entity->pos = Vector2Scale(entity->pos, FIXED_DT);
+}
+
 // (NOTE) maybe rename to move_entities?
+// (THINKING) I feel like I should have a seperate pass just for integrating
+// movement then this loop would just update the vel. But then I guess what's
+// the point of that?
 void update_entity_movement(TransientStorage *t) {
   for (int i = 0; i < t->entity_count; i++) {
     Entity *entity = &t->entities[i];
@@ -164,6 +198,7 @@ void update_entity_movement(TransientStorage *t) {
     case ENTITY_GUNMEN: {
     } break;
     case ENTITY_HORSE_GUNMEN: {
+      horse_movement(entity, t->player.turn_input);
       Vector2 scaled_vel = Vector2Scale(entity->vel, FIXED_DT);
       entity->pos = Vector2Add(scaled_vel, entity->pos);
     } break;
@@ -221,11 +256,12 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
     t->player.vel.x *= 0.75f;
   }
   t->player.pos.x += t->player.vel.x * dt;
+  // printf("x: %f\n", t->player.vel.x);
 
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
-  // t->player.pos.y -= t->player.vel.y * dt;
+  t->player.pos.y -= t->player.vel.y * dt;
 
   // ------ PARRY & SHOOTING ----------------------------------------------
   // (NOTE) we parry bullets from behind too, should probably turn that off
@@ -446,33 +482,31 @@ void update_entities(Memory *memory) {
       }
     } break;
     case ENTITY_HORSE_GUNMEN: {
-      // Follow behavior for horse enemies
-      Vector2 target_offset = {1.5, -3.5}; // stay slightly behind the player
-      Vector2 target = Vector2Add(t->player.pos, target_offset);
-      Vector2 to_target = Vector2Subtract(target, entity->pos);
-      float distance = Vector2Length(to_target);
+      // PLAYER FOLLOW
 
-      if (distance > 0.05f) {
-        Vector2 dir = Vector2Normalize(to_target);
+      // if the npc is infront of the player it should slow down its
+      // acceleration not just move down the y axis
+      // (TODO) this -1 will be a variable
+      // I want there to be some random offset or noise to keep so the enemy
+      // isnt always perfectly aligned with the player when chasing
+      // or there should be some variety in there movements
+      // (TODO) entities shouldnt overlap they can touch breifly but should be
+      // pushed outside each other after that
+      // (TODO) if the enemy is between a palyer and the wall it should speed up
+      // or slow down
+      Vector2 destination = {t->player.pos.x, t->player.pos.y};
+      Vector2 distance = Vector2Subtract(destination, entity->pos);
+      Vector2 dir = Vector2Normalize(distance);
+      float speed = Vector2Length(entity->vel);
+      entity->vel = Vector2Scale(dir, 7.5);
 
-        // speed scales with distance (faster when far away)
-        float min_speed = 3.0f;
-        float max_speed = 10.0f;
-        float t_speed = fminf(distance / 5.0f, 1.0f); // smooth ramp up
-        float follow_speed = Lerp(min_speed, max_speed, t_speed);
-
-        entity->vel = Vector2Scale(dir, follow_speed);
-
-        // prevent overlap: stop short of the player
-        if (distance < 0.75f) {
-          entity->vel = (Vector2){0, 0};
-        }
-      } else {
-        // damp to stop jitter
-        entity->vel = Vector2Scale(entity->vel, 0.9f);
+      if (fabsf(distance.x) <= 1) {
+        entity->vel.x = entity->vel.x * -0.7;
+        // entity->vel.x = Lerp(entity->vel.x, entity->vel.x * -0.7, .0005);
       }
 
       if (false) {
+        // if (entity->weapon_cooldown <= 0) {
         Vector2 entity_center = {
             entity->pos.x + entity->width * 0.5f,
             entity->pos.y + entity->height * 0.5f,
@@ -532,6 +566,7 @@ void update(Memory *memory) {
   if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
     turn_input = 1.0f;
   }
+  t->player.turn_input = turn_input;
 
   if (IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)) {
     t->player.pos.y += -7.0f * dt;
