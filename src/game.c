@@ -92,6 +92,8 @@ void load_map(TransientStorage *t, const char *path) {
         entity->color = ORANGE;
         entity->width = 0.35f;
         entity->height = 0.75f;
+        entity->current_health = 3;
+        entity->max_health = 3;
         set_flag(entity, EntityFlags_Destructable);
       }
     }
@@ -134,7 +136,24 @@ void init_game(TransientStorage *t, PermanentStorage *p) {
   t->camera.zoom = 1.0f;
 
   PlayMusicStream(p->bg_music);
-  load_map(t, "assets/map.txt");
+  // load_map(t, "assets/map.txt");
+
+  Entity *entity = entity_spawn(t, t->player.pos.x - 1, t->player.pos.y + 5,
+                                ENTITY_HORSE_GUNMEN);
+  entity->color = ORANGE;
+  entity->width = 0.35f;
+  entity->height = 0.75f;
+  entity->current_health = 3;
+  entity->max_health = 3;
+  set_flag(entity, EntityFlags_Destructable);
+
+  // Entity *entity2 = entity_spawn(t, t->player.pos.x + 1, t->player.pos.y + 6,
+  //                                ENTITY_HORSE_GUNMEN);
+  // entity2->color = ORANGE;
+  // entity2->width = 0.35f;
+  // entity2->height = 0.75f;
+  // entity2->current_health = 3;
+  // entity2->max_health = 3;
 }
 
 void compact_entities(TransientStorage *t) {
@@ -160,33 +179,6 @@ void update_timers(TransientStorage *t) {
   }
 }
 
-void horse_movement(Entity *entity, float turn_input) {
-  float turn_speed = 540.0f;
-  float turn_drag = 50.0f;
-  float target_angle = 45.0f * turn_input;
-  float angle_accel = (target_angle - entity->angle) * turn_speed;
-  entity->angle_vel += angle_accel * FIXED_DT;
-  entity->angle_vel -= entity->angle_vel * turn_drag * FIXED_DT;
-  entity->angle += entity->angle_vel * FIXED_DT;
-  Vector2 forward = {cosf((entity->angle - 90.0f) * DEG2RAD),
-                     sinf((entity->angle - 90.0f) * DEG2RAD)};
-  float accel_strength = 325.0f;
-  float drag = 25.0f;
-
-  Vector2 accel = Vector2Scale(forward, accel_strength);
-  entity->vel = Vector2Add(entity->vel, Vector2Scale(accel, FIXED_DT));
-  entity->vel =
-      Vector2Subtract(entity->vel, Vector2Scale(entity->vel, drag * FIXED_DT));
-
-  // direction-flip damping
-  if ((turn_input > 0 && entity->vel.x < 0) ||
-      (turn_input < 0 && entity->vel.x > 0)) {
-    entity->vel.x *= 0.75f;
-  }
-  // entity->pos.y += entity->vel.y * FIXED_DT;
-  // entity->pos = Vector2Scale(entity->pos, FIXED_DT);
-}
-
 // (NOTE) maybe rename to move_entities?
 // (THINKING) I feel like I should have a seperate pass just for integrating
 // movement then this loop would just update the vel. But then I guess what's
@@ -198,7 +190,6 @@ void update_entity_movement(TransientStorage *t) {
     case ENTITY_GUNMEN: {
     } break;
     case ENTITY_HORSE_GUNMEN: {
-      horse_movement(entity, t->player.turn_input);
       Vector2 scaled_vel = Vector2Scale(entity->vel, FIXED_DT);
       entity->pos = Vector2Add(scaled_vel, entity->pos);
     } break;
@@ -261,7 +252,7 @@ void update_player(TransientStorage *t, float turn_input, PermanentStorage *p) {
   // (TODO)clamp find a better way to reuse these tile values
   t->player.pos.x =
       Clamp(t->player.pos.x, -5 + t->player.width * 2.0f, 8 + t->player.width);
-  t->player.pos.y -= t->player.vel.y * dt;
+  // t->player.pos.y -= t->player.vel.y * dt;
 
   // ------ PARRY & SHOOTING ----------------------------------------------
   // (NOTE) we parry bullets from behind too, should probably turn that off
@@ -411,41 +402,70 @@ void resolve_collisions(TransientStorage *t, PermanentStorage *p) {
       if (!CheckCollisionRecs(rect_from_entity(a), rect_from_entity(b)))
         continue;
 
+      Entity *destructible = NULL;
+      Entity *projectile = NULL;
+
       if (is_set(a, EntityFlags_Projectile) &&
-          is_set(b, EntityFlags_Projectile)) {
+          is_set(b, EntityFlags_Destructable)) {
+        destructible = b;
+        projectile = a;
+      } else if (is_set(b, EntityFlags_Projectile) &&
+                 is_set(a, EntityFlags_Destructable)) {
+        destructible = a;
+        projectile = b;
+      }
 
-        if (is_set(a, EntityFlags_Player)) {
-          delete_entity(a);
-          b->vel = Vector2Negate(b->vel);
-          b->color = GOLD;
-          b->pos.y += b->vel.y * FIXED_DT;
-        } else if (is_set(b, EntityFlags_Player)) {
-          delete_entity(b);
-          a->vel = Vector2Negate(a->vel);
-          a->color = GOLD;
-          a->pos.y += a->vel.y * FIXED_DT;
-        } else {
-          delete_entity(a);
-          delete_entity(b);
+      if (destructible && projectile) {
+        destructible->current_health--;
+        if (destructible->current_health == 0) {
+          delete_entity(destructible);
         }
-        continue;
+        delete_entity(projectile);
       }
 
-      if (is_set(a, EntityFlags_Destructable)) {
-        if (a->type == ENTITY_GUNMEN) {
-          PlaySound(p->enemy_death_sound);
-          t->enemies_killed++;
-        }
-        delete_entity(a);
-        delete_entity(b);
-        continue;
-      }
-
-      if (is_set(a, EntityFlags_NotDestructable) &&
-          is_set(b, EntityFlags_Projectile)) {
-        delete_entity(b);
-        continue;
-      }
+      // if (is_set(a, EntityFlags_Projectile) &&
+      //     is_set(b, EntityFlags_Projectile)) {
+      //
+      //   if (is_set(a, EntityFlags_Player)) {
+      //     delete_entity(a);
+      //     b->vel = Vector2Negate(b->vel);
+      //     b->color = GOLD;
+      //     b->pos.y += b->vel.y * FIXED_DT;
+      //   } else if (is_set(b, EntityFlags_Player)) {
+      //     delete_entity(b);
+      //     a->vel = Vector2Negate(a->vel);
+      //     a->color = GOLD;
+      //     a->pos.y += a->vel.y * FIXED_DT;
+      //   } else {
+      //     delete_entity(a);
+      //     delete_entity(b);
+      //   }
+      //   continue;
+      // }
+      //
+      // if (is_set(a, EntityFlags_Destructable)) {
+      //   printf("yo\n");
+      //   if (a->current_health > 0) {
+      //     a->current_health--;
+      //     printf("yo\n");
+      //   }
+      //
+      //   if (a->current_health == 0) {
+      //     delete_entity(a);
+      //   }
+      //   // if (a->type == ENTITY_GUNMEN) {
+      //   //   PlaySound(p->enemy_death_sound);
+      //   //   t->enemies_killed++;
+      //   // }
+      //   // delete_entity(b);
+      //   continue;
+      // }
+      //
+      // // if (is_set(a, EntityFlags_NotDestructable) &&
+      // //     is_set(b, EntityFlags_Projectile)) {
+      // //   delete_entity(b);
+      // //   continue;
+      // // }
     }
   }
 }
@@ -492,18 +512,34 @@ void update_entities(Memory *memory) {
       // or there should be some variety in there movements
       // (TODO) entities shouldnt overlap they can touch breifly but should be
       // pushed outside each other after that
-      // (TODO) if the enemy is between a palyer and the wall it should speed up
-      // or slow down
-      Vector2 destination = {t->player.pos.x, t->player.pos.y};
-      Vector2 distance = Vector2Subtract(destination, entity->pos);
-      Vector2 dir = Vector2Normalize(distance);
-      float speed = Vector2Length(entity->vel);
-      entity->vel = Vector2Scale(dir, 7.5);
+      // (TODO) if the enemy is between a palyer and the wall it should speed
+      // up or slow down
+      //
+      // (TODO) I want ways to specify the follow type. Should he follow
+      // behind? should he be ahead? should a group of them be in a certain
+      // formation? Should be right next to me Should he keep his distance?
+      //
+      // (TODO) should enemies attempt to dodge your bullet?
+      // maybe theres a timer for how long your cursor is near the enemy and
+      // if its too long theyre more likely tod odge. you can imagine it as
+      // them seeing you point there gun at them so they can predict that
+      // youre going to shoot?
+      //
+      Vector2 desired_pos = Vector2Add(t->player.pos, (Vector2){1, 3.5f});
+      Vector2 to_target = Vector2Subtract(desired_pos, entity->pos);
 
-      if (fabsf(distance.x) <= 1) {
-        entity->vel.x = entity->vel.x * -0.7;
-        // entity->vel.x = Lerp(entity->vel.x, entity->vel.x * -0.7, .0005);
-      }
+      float distance = Vector2Length(to_target);
+      if (distance < 0.01f)
+        return;
+
+      Vector2 desired_vel = Vector2Scale(Vector2Normalize(to_target), 9.0f);
+      float smooth_factor = 3.0f; // higher = more responsive
+      entity->vel =
+          Vector2Lerp(entity->vel, desired_vel, FIXED_DT * smooth_factor);
+
+      // if (fabsf(distance.x) <= 1) {
+      //   entity->vel.x *= -0.5f;
+      // }
 
       if (false) {
         // if (entity->weapon_cooldown <= 0) {
@@ -596,9 +632,9 @@ void update(Memory *memory) {
   int steps = 0;
   const int MAX_STEPS = 8;
   while (t->accumulator >= FIXED_DT && steps < MAX_STEPS) {
-    if (t->player.pos.y <= t->map_end.y) {
-      return;
-    }
+    // if (t->player.pos.y <= t->map_end.y) {
+    //   return;
+    // }
 
     update_timers(t);
     update_player(t, turn_input, p);
@@ -738,10 +774,16 @@ void render(Memory *gs) {
       Rectangle src = get_tile_source_rect(tilesheet, 55);
       Vector2 origin = {TILE_SIZE / 2.0f, TILE_SIZE / 2.0f};
       Rectangle dst = {projected.x, projected.y, TILE_SIZE, TILE_SIZE};
-      DrawTexturePro(p->tilesheet, src, dst, origin, 0, entity->color);
+      DrawTexturePro(p->tilesheet, src, dst, origin, 270, entity->color);
     } break;
 
     case ENTITY_PROJECTILE: {
+      // Rectangle src = {0, 0, 32, 32};
+      // Rectangle dst = {projected.x, projected.y, 10, 10};
+      // Vector2 origin = {8, 8};
+      // DrawTexturePro(p->bullet_sprite, src, dst, origin, 150.0f,
+      // entity->color);
+
       Vector3 cube_center = {entity->pos.x + entity->width * 0.5f,
                              entity->pos.y + entity->height * 0.5f, 0};
       float cube_depth = entity->height;
@@ -749,6 +791,7 @@ void render(Memory *gs) {
       float tilt_angle = 0.0f;
       draw_iso_cube(cube_center, entity->width, cube_depth, cube_height,
                     tilt_angle, entity->color);
+
     } break;
 
     case ENTITY_GUNMEN: {
@@ -823,8 +866,8 @@ void render(Memory *gs) {
   float scale_y = (float)GetScreenHeight() / VIRTUAL_HEIGHT;
   // the sim region should be the camera area
   //
-  // (NOTE) My fps on my macbook goes from 200-400 to 400-500 when i turn camera
-  // zoom off
+  // (NOTE) My fps on my macbook goes from 200-400 to 400-500 when i turn
+  // camera zoom off
   t->camera.zoom = fminf(scale_x, scale_y);
   float scale = fminf(scale_x, scale_y);
 
@@ -852,7 +895,8 @@ void render(Memory *gs) {
   }
 
   // (TODO) clean this junk up
-  if (t->player.pos.y <= t->map_end.y) {
+  if (false) {
+    // if (t->player.pos.y <= t->map_end.y) {
     Rectangle summary = {0};
     summary.width = 250;
     summary.height = 300;

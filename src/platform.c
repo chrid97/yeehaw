@@ -27,6 +27,7 @@ typedef void (*game_update_and_render_fn)(Memory *memory);
 void load_assets(PermanentStorage *p) {
   // Load textures
   p->tilesheet = LoadTexture("assets/tiles.png");
+  p->bullet_sprite = LoadTexture("assets/Spritesheets/bullet.png");
 
   // Load Music
   p->bg_music = LoadMusicStream("assets/spagetti-western.ogg");
