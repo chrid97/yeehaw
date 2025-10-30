@@ -66,7 +66,6 @@ void game_update_and_render(Memory *memory, GameInput *input) {
   assert(sizeof(GameState) <= memory->permanent_storage_size);
   GameState *game_state = (GameState *)memory->permanent_storage;
 
-  float dt = GetFrameTime();
   float scale_x = (float)input->screen_width / VIRTUAL_WIDTH;
   float scale_y = (float)input->screen_height / VIRTUAL_HEIGHT;
   float scale = fminf(scale_x, scale_y);
@@ -90,36 +89,41 @@ void game_update_and_render(Memory *memory, GameInput *input) {
     printf("Reload game\n");
   }
 
-  if (input->move_up) {
-    player->pos =
-        Vector2Add(player->pos, Vector2Negate(Vector2Scale(player->vel, dt)));
+  float dt = FIXED_DT;
+  game_state->accumulator += GetFrameTime();
+  while (game_state->accumulator >= FIXED_DT) {
+    if (input->move_up) {
+      player->pos =
+          Vector2Add(player->pos, Vector2Negate(Vector2Scale(player->vel, dt)));
+    }
+
+    if (input->move_down) {
+      player->pos = Vector2Add(player->pos, Vector2Scale(player->vel, dt));
+    }
+
+    if (input->move_left) {
+      player->angle -= 90 * dt;
+    }
+
+    if (input->move_right) {
+      player->angle += 90 * dt;
+    }
+
+    float acceleration = 10;
+    Vector2 dir = {cosf((player->angle + 90) * DEG2RAD),
+                   sinf((player->angle + 90) * DEG2RAD)};
+
+    float original_speed = Vector2Length(player->vel);
+    Vector2 initial_velocity = Vector2Scale(dir, original_speed);
+    Vector2 new_vel = Vector2AddValue(initial_velocity, acceleration * dt);
+    player->vel = new_vel;
+
+    player->pos.x = Clamp(player->pos.x, player->size.x / 2.0f,
+                          VIRTUAL_WIDTH - player->size.x / 2.0f);
+    player->pos.y = Clamp(player->pos.y, player->size.y / 2.0f,
+                          VIRTUAL_HEIGHT - player->size.y / 2.0f);
+    game_state->accumulator -= FIXED_DT;
   }
-
-  if (input->move_down) {
-    player->pos = Vector2Add(player->pos, Vector2Scale(player->vel, dt));
-  }
-
-  if (input->move_left) {
-    player->angle -= 90 * dt;
-  }
-
-  if (input->move_right) {
-    player->angle += 90 * dt;
-  }
-
-  float acceleration = 10;
-  Vector2 dir = {cosf((player->angle + 90) * DEG2RAD),
-                 sinf((player->angle + 90) * DEG2RAD)};
-
-  float original_speed = Vector2Length(player->vel);
-  Vector2 initial_velocity = Vector2Scale(dir, original_speed);
-  Vector2 new_vel = Vector2AddValue(initial_velocity, acceleration * dt);
-  player->vel = new_vel;
-
-  player->pos.x = Clamp(player->pos.x, player->size.x / 2.0f,
-                        VIRTUAL_WIDTH - player->size.x / 2.0f);
-  player->pos.y = Clamp(player->pos.y, player->size.y / 2.0f,
-                        VIRTUAL_HEIGHT - player->size.y / 2.0f);
 
   BeginDrawing();
   ClearBackground(COLOR_SAND);

@@ -11,7 +11,9 @@
 #define VIRTUAL_WIDTH 480
 #define VIRTUAL_HEIGHT 270
 
+// (NOTE) Test both to see if it makes a difference in my physics simulation
 #define FIXED_DT (1.0f / 120.0f)
+// #define FIXED_DT (1.0f / 60.0f)
 
 #define MAX_ENTITIES 100
 
@@ -49,7 +51,8 @@ typedef struct {
 
   Entity player;
 
-  bool game_initialized;
+  /// Time-step accumulator
+  float accumulator;
 } GameState;
 
 void game_update_and_render(Memory *memory, GameInput *game_input);
