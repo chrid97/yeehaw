@@ -1,139 +1,49 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-// -------------------------------------
-// Constants
-// -------------------------------------
-#include "raylib.h"
+#include <stdbool.h>
 #include <stdint.h>
-#define TILE_SIZE 32
 
-// #define VIRTUAL_WIDTH 640
-// #define VIRTUAL_HEIGHT 360
+#define Kilobytes(Value) ((Value) * 1024LL)
+#define Megabytes(Value) (Kilobytes(Value) * 1024LL)
+#define Gigabytes(Value) (Megabytes(Value) * 1024LL)
+#define Terabytes(Value) (Gigabytes(Value) * 1024LL)
 
-// PLAYING AROUND WITH SMALLER RESOLUTION
-#define VIRTUAL_WIDTH 480
-#define VIRTUAL_HEIGHT 270
+// SIGNED
+typedef int8_t i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
 
-#define FIXED_DT (1.0f / 120.0f)
-
-#define MAX_ENTITIES 1000
-
-// -------------------------------------
-// Enums
-// -------------------------------------
-
-typedef enum {
-  ENTITY_NONE = 0,
-  ENTITY_HAZARD,
-  ENTITY_PLAYER,
-  ENTITY_PROJECTILE,
-  ENTITY_GUNMEN,
-  ENTITY_HORSE_GUNMEN,
-  ENTITY_PARTICLE,
-} EntityType;
-
-typedef enum {
-  EntityFlags_Destructable = (1 << 0),
-  // (NOTE) I probably don't need EntityFlags_NotDestructable, if something
-  // isn't destructable then by default its non destructable lol
-  EntityFlags_NotDestructable = (1 << 1),
-  EntityFlags_Projectile = (1 << 2),
-  EntityFlags_Player = (1 << 3),
-  EntityFlags_Deleted = (1 << 4),
-} EntityFlags;
+// UNSIGNED
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
 
 typedef struct {
-  EntityType type;
-  uint32_t flags;
+  // --- Player input ---
+  bool move_up;
+  bool move_down;
+  bool move_left;
+  bool move_right;
+  bool reload;
+  bool mute;
 
-  float height;
-  float width;
-  Vector2 pos;
-  Vector2 vel;
-  float angle;
-  float angle_vel;
-  float bank_angle;
+  // --- Environment ---
+  u16 screen_width;
+  u16 screen_height;
+} GameInput;
 
-  int current_health;
-  int max_health;
-
-  float damage_cooldown;
-
-  float weapon_cooldown;
-  bool is_firing;
-  int ammo;
-  int max_ammo;
-  /// How long it takes the player to reload
-  float reload_time;
-
-  bool parry_processed;
-  Rectangle parry_area;
-  float parry_window_timer;
-
-  float fade_timer;
-
-  float turn_input;
-
-  Color color;
-} Entity;
-
-// -------------------------------------
-// Transient (resettable) storage
-// -------------------------------------
+// MEMORY
 typedef struct {
+  bool initalized;
 
-  Entity entities[MAX_ENTITIES];
-  int entity_count;
-  Entity *draw_list[MAX_ENTITIES];
+  u64 permanent_storage_size;
+  void *permanent_storage;
 
-  Entity player;
-
-  float shake_timer;
-  float game_timer;
-
-  Camera2D camera;
-
-  double accumulator;
-  bool game_initialized;
-
-  // scoring stuff
-  int enemies_killed;
-  // I don't know if this one makes sense since the map is always the same size
-  // so if you complete the level it should always be the same
-  float distance_traveled;
-  // int obstacles_destroyed;
-  int score;
-  // map stuff
-  Vector2 map_end;
-
-  float hitstop_timer;
-  Vector2 parry_events[10];
-  int parry_events_count;
-
-  //(TOOD) this should maybe be in perm storage
-  Vector2 cursor_pos;
-} TransientStorage;
-
-// -------------------------------------
-// Permanent (persistent) storage (Lifetime is the duration of the game)
-// -------------------------------------
-typedef struct {
-  Texture2D tilesheet;
-  Texture2D bullet_sprite;
-  Music bg_music;
-
-  Sound hit_sound;
-  Sound enemy_death_sound;
-  Sound player_gunshot;
-  Sound parry_sound;
-
-  bool debug_on;
-} PermanentStorage;
-
-typedef struct {
-  PermanentStorage permanent;
-  TransientStorage transient;
+  u64 transient_storage_size;
+  void *transient_storage;
 } Memory;
 
 #endif

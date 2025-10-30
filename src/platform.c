@@ -18,40 +18,39 @@
 #error "Unsupported platform"
 #endif
 
-Memory memory = {0};
-typedef void (*game_update_and_render_fn)(Memory *memory);
+typedef void (*GameUpdateAndRender)(Memory *memory, GameInput *game_input);
 
-// --------------------------------------------------
-// Asset Loading
-// --------------------------------------------------
-void load_assets(PermanentStorage *p) {
-  // Load textures
-  p->tilesheet = LoadTexture("assets/tiles.png");
-  p->bullet_sprite = LoadTexture("assets/Spritesheets/bullet.png");
+void collect_input(GameInput *input) {
+  input->move_up = IsKeyDown(KEY_W);
+  input->move_down = IsKeyDown(KEY_S);
+  input->move_left = IsKeyDown(KEY_A);
+  input->move_right = IsKeyDown(KEY_D);
+  input->reload = IsKeyPressed(KEY_R);
+  input->mute = IsKeyPressed(KEY_M);
 
-  // Load Music
-  p->bg_music = LoadMusicStream("assets/spagetti-western.ogg");
-  SetMusicVolume(p->bg_music, 0.05f);
+  input->screen_width = GetScreenWidth();
+  input->screen_height = GetScreenHeight();
+}
 
-  // Load SFX
-  p->hit_sound = LoadSound("assets/sfx_sounds_impact12.wav");
-  SetSoundVolume(p->hit_sound, 0.5f);
-
-  p->enemy_death_sound = LoadSound("assets/sfx_deathscream_human1.wav");
-  SetSoundVolume(p->enemy_death_sound, 0.25f);
-
-  p->player_gunshot = LoadSound("assets/desert-eagle-gunshot.wav");
-  SetSoundVolume(p->player_gunshot, 0.1f);
+void load_game() {
+  void *game_lib = dlopen(DYNAMIC_LIB, RTLD_NOW);
+  if (!game_lib) {
+    fprintf(stderr, "dlopen failed: %s\n", dlerror());
+  }
 }
 
 int main(void) {
-  InitWindow(VIRTUAL_WIDTH * 2, VIRTUAL_HEIGHT * 2, "Yeehaw");
-  // InitWindow(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, "Yeehaw");
+  Memory game_memory = {0};
+  game_memory.permanent_storage_size = Megabytes(64);
+  game_memory.transient_storage_size = Gigabytes(1);
+  game_memory.permanent_storage = calloc(1, game_memory.permanent_storage_size);
+  game_memory.transient_storage = calloc(1, game_memory.transient_storage_size);
+
+  InitWindow(960, 540, "Yeehaw");
   SetTargetFPS(0);
 
   InitAudioDevice();
   srand((unsigned int)time(NULL));
-  load_assets(&memory.permanent);
 
   void *game_lib = dlopen(DYNAMIC_LIB, RTLD_NOW);
   if (!game_lib) {
@@ -59,8 +58,9 @@ int main(void) {
     return 1;
   }
 
-  game_update_and_render_fn update = dlsym(game_lib, "game_update_and_render");
-  if (!update) {
+  GameUpdateAndRender game_update_and_render =
+      dlsym(game_lib, "game_update_and_render");
+  if (!game_update_and_render) {
     fprintf(stderr, "dlsym failed: %s\n", dlerror());
     return 1;
   }
@@ -83,14 +83,15 @@ int main(void) {
         fprintf(stderr, "dlopen failed: %s\n", dlerror());
         return 1;
       }
-      update = dlsym(game_lib, "game_update_and_render");
-      if (!update) {
+      game_update_and_render = dlsym(game_lib, "game_update_and_render");
+      if (!game_update_and_render) {
         fprintf(stderr, "dlsym failed: %s\n", dlerror());
         return 1;
       }
     }
-
-    update(&memory);
+    GameInput input = {0};
+    collect_input(&input);
+    game_update_and_render(&game_memory, &input);
   }
 #endif
 
