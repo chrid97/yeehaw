@@ -39,6 +39,7 @@ typedef struct {
   Vector2 vel;
   /// Degrees
   float angle;
+  float angular_vel;
 
   /// RGB
   Color color;

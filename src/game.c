@@ -31,18 +31,18 @@ Rectangle scale_rect(Rectangle *rect, float scale) {
                      rect->height * scale};
 }
 
-void draw_player(Entity *entity, float scale) {
-  Rectangle rect = {entity->pos.x, entity->pos.y, entity->size.x,
-                    entity->size.y};
-  Vector2 origin = {entity->size.x / 2.0f, entity->size.y / 2.0f};
+void draw_player(Entity *player, float scale) {
+  Rectangle rect = {player->pos.x, player->pos.y, player->size.x,
+                    player->size.y};
+  Vector2 origin = {player->size.x / 2.0f, player->size.y / 2.0f};
   DrawRectanglePro(scale_rect(&rect, scale), Vector2Scale(origin, scale),
-                   entity->angle, entity->color);
+                   player->angle, player->color);
 
   // Draw this to show what direction the player is facing
-  float radians = (entity->angle + 90) * DEG2RAD;
+  float radians = (player->angle + 90) * DEG2RAD;
   Vector2 forward = {cosf(radians), sinf(radians)};
   Vector2 face_pos =
-      Vector2Add(entity->pos, Vector2Scale(forward, entity->size.y / -3.0f));
+      Vector2Add(player->pos, Vector2Scale(forward, player->size.y / -3.0f));
   DrawCircle(face_pos.x * scale, face_pos.y * scale, 2 * scale, BROWN);
 }
 
@@ -75,7 +75,7 @@ void game_update_and_render(Memory *memory, GameInput *input) {
         .type = ENTITY_PLAYER,
         .size = {15, 20},
         .pos = {VIRTUAL_WIDTH / 2.0f, VIRTUAL_HEIGHT / 2.0f},
-        .vel = {50, 50},
+        .vel = {0, 0},
         .angle = 0,
         .color = COLOR_DARK_GREY,
     };
@@ -92,31 +92,37 @@ void game_update_and_render(Memory *memory, GameInput *input) {
   float dt = FIXED_DT;
   game_state->accumulator += GetFrameTime();
   while (game_state->accumulator >= FIXED_DT) {
-    if (input->move_up) {
-      player->pos =
-          Vector2Add(player->pos, Vector2Negate(Vector2Scale(player->vel, dt)));
-    }
 
-    if (input->move_down) {
-      player->pos = Vector2Add(player->pos, Vector2Scale(player->vel, dt));
-    }
+    int turn_input = (int)input->move_right - (int)input->move_left;
+    int forward_input = (int)input->move_down - (int)input->move_up;
 
-    if (input->move_left) {
-      player->angle -= 90 * dt;
-    }
+    // -------------------------------------
+    // Calculate angular acceleration
+    // -------------------------------------
+    float turn_accel = 400 * turn_input;
+    float turn_drag = 10;
+    // (NOTE) maybe I'll want to reduce the angular acceleration at lower speed?
+    float angular_acceleration = turn_accel - player->angular_vel * turn_drag;
+    player->angular_vel += angular_acceleration * dt;
+    player->angle += player->angular_vel * dt;
 
-    if (input->move_right) {
-      player->angle += 90 * dt;
-    }
-
-    float acceleration = 10;
+    // -------------------------------------
+    // Calculate acceleration
+    // -------------------------------------
     Vector2 dir = {cosf((player->angle + 90) * DEG2RAD),
                    sinf((player->angle + 90) * DEG2RAD)};
+    Vector2 dir_force = Vector2Scale(dir, forward_input * 3000);
+    float drag_coeff = 1;
+    float speed = Vector2Length(player->vel);
+    Vector2 drag_force = Vector2Scale(player->vel, -drag_coeff * speed);
+    // Vector2 drag_force = Vector2Scale(player->vel, -drag_coeff);
+    Vector2 acceleration = Vector2Add(dir_force, drag_force);
 
-    float original_speed = Vector2Length(player->vel);
-    Vector2 initial_velocity = Vector2Scale(dir, original_speed);
-    Vector2 new_vel = Vector2AddValue(initial_velocity, acceleration * dt);
-    player->vel = new_vel;
+    // -------------------------------------
+    // Integrate acceleration and velocity
+    // -------------------------------------
+    player->vel = Vector2Add(player->vel, Vector2Scale(acceleration, dt));
+    player->pos = Vector2Add(player->pos, Vector2Scale(player->vel, dt));
 
     player->pos.x = Clamp(player->pos.x, player->size.x / 2.0f,
                           VIRTUAL_WIDTH - player->size.x / 2.0f);
@@ -125,10 +131,14 @@ void game_update_and_render(Memory *memory, GameInput *input) {
     game_state->accumulator -= FIXED_DT;
   }
 
+  // -------------------------------------
+  // RENDER
+  // -------------------------------------
   BeginDrawing();
   ClearBackground(COLOR_SAND);
 
   draw_player(player, scale);
 
+  DrawFPS(0, 0);
   EndDrawing();
 }
