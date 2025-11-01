@@ -47,7 +47,7 @@ int main(void) {
   game_memory.transient_storage = calloc(1, game_memory.transient_storage_size);
 
   InitWindow(960, 540, "Yeehaw");
-  SetTargetFPS(0);
+  SetTargetFPS(60);
 
   InitAudioDevice();
   srand((unsigned int)time(NULL));
