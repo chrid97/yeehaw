@@ -104,7 +104,8 @@ void game_update_and_render(Memory *memory, GameInput *input) {
 
     game_state->player = (Entity){
         .type = ENTITY_PLAYER,
-        .size = {18.5, 48},
+        // .size = {18.5, 48},
+        .size = {40, 100},
         .pos = {VIRTUAL_WIDTH / 2.0f, VIRTUAL_HEIGHT / 2.0f},
         .vel = {0, 0},
         .angle = 0,
@@ -152,7 +153,7 @@ void game_update_and_render(Memory *memory, GameInput *input) {
     // -------------------------------------
     Vector2 facing_dir = {cosf((player->angle + 90) * DEG2RAD),
                           sinf((player->angle + 90) * DEG2RAD)};
-    Vector2 dir_force = Vector2Scale(facing_dir, forward_input * 200);
+    Vector2 dir_force = Vector2Scale(facing_dir, forward_input * 2000);
     float speed = Vector2Length(player->vel);
     Vector2 drag_force =
         Vector2Add(Vector2Scale(player->vel, -lin_drag),
@@ -180,40 +181,27 @@ void game_update_and_render(Memory *memory, GameInput *input) {
 
   DrawRectangle(0, 0, 100, 100, RED);
 
-  // Split player height into 3 segements
-  const int PLAYER_SEGMENTS = 5;
-  const int SEGMENT_HEIGHT = player->size.y / PLAYER_SEGMENTS;
-  for (int i = 0; i < PLAYER_SEGMENTS; i++) {
-    Rectangle rect = {player->pos.x, player->pos.y + SEGMENT_HEIGHT * i,
-                      player->size.x, SEGMENT_HEIGHT};
-    Vector2 origin = {player->size.x / 2.0f, player->size.y / 2.0f};
-    float angle = 0;
-    if (i == 0) {
-      angle = player->angle;
-    }
-    if (i == 1) {
-      angle = player->angle * 0.5f;
-    }
-    if (i == 2) {
-      angle = player->angle * 0.3f;
-    }
-    if (i == 3) {
-      angle = player->angle * 0.09f;
-    }
-
-    DrawRectanglePro(rect, origin, angle, BROWN);
-    // DrawLine((player->pos.x - player->size.x / 2.0f) * scale, player->pos.y,
-    //          (player->pos.x + player->size.x / 2.0f) * scale, player->pos.y,
-    //          BLACK);
-  }
-
-  // Rectangle rect = rect_from_entity(player);
-  // Rectangle scaled_rect = scale_rect(&rect, scale);
-  // Vector2 origin = {player->size.x / 2.0f, player->size.y / 2.0f};
-  // DrawRectanglePro(scale_rect(&rect, scale), Vector2Scale(origin, scale),
-  //                  player->angle, BROWN);
-
   draw_player(player, 1);
+  const int TOTAL_SEGMENTS = 5;
+  const int HORSE_SEGMENTS = player->size.y / TOTAL_SEGMENTS;
+
+  const int SPACING = 10;
+  const int RADIUS = 5;
+
+  Vector2 dir = {cosf((player->angle - 90) * DEG2RAD),
+                 sinf((player->angle - 90) * DEG2RAD)};
+
+  int radius = 5;
+
+  Vector2 origin = (Vector2){player->pos.x,
+                             player->pos.y - (player->size.y / 2.0f) + radius};
+  Vector2 p0 = (Vector2){origin.x, origin.y + 20};
+  Vector2 constraint = Vector2Subtract(origin, p0);
+
+  Color color = RED;
+  DrawCircleV(origin, radius, color);
+  DrawCircleV(p0, radius, color);
+
   EndMode2D();
 
   int y_offset = 0;
