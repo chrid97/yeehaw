@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 const Color COLOR_SAND = {0xD9, 0xB7, 0x7E, 255};      // #d9b77e
@@ -102,6 +103,8 @@ void game_update_and_render(Memory *memory, GameInput *input) {
   if (!memory->initalized) {
     game_state->accumulator = 0;
 
+    memset(game_state->segments, 0, sizeof(game_state->segments));
+
     game_state->player = (Entity){
         .type = ENTITY_PLAYER,
         // .size = {18.5, 48},
@@ -160,7 +163,7 @@ void game_update_and_render(Memory *memory, GameInput *input) {
                    Vector2Scale(player->vel, -quad_drag * speed));
     Vector2 net_force = Vector2Add(dir_force, drag_force);
     Vector2 acceleration = Vector2Scale(net_force, 1.0f);
-    print_vector(net_force);
+    // print_vector(net_force);
 
     // -------------------------------------
     // Integrate acceleration and velocity
@@ -188,19 +191,57 @@ void game_update_and_render(Memory *memory, GameInput *input) {
   const int SPACING = 10;
   const int RADIUS = 5;
 
-  Vector2 dir = {cosf((player->angle - 90) * DEG2RAD),
-                 sinf((player->angle - 90) * DEG2RAD)};
+  int distance = 20;
+  Vector2 dir = {cosf((player->angle) * DEG2RAD),
+                 sinf((player->angle) * DEG2RAD)};
+  dir = (Vector2Scale(dir, 10));
 
   int radius = 5;
-
-  Vector2 origin = (Vector2){player->pos.x,
-                             player->pos.y - (player->size.y / 2.0f) + radius};
-  Vector2 p0 = (Vector2){origin.x, origin.y + 20};
-  Vector2 constraint = Vector2Subtract(origin, p0);
-
   Color color = RED;
-  DrawCircleV(origin, radius, color);
-  DrawCircleV(p0, radius, color);
+  Vector2 anchor =
+      Vector2Subtract(player->pos, (Vector2){0, player->size.y / 2.0f});
+  anchor = Vector2Add(dir, anchor);
+
+  // game_state->segments[0] = GetScreenToWorld2D(GetMousePosition(),
+  // game_state->camera);
+  game_state->segments[0] = anchor;
+  for (int i = 1; i < 5; i++) {
+    Vector2 anchor = game_state->segments[i - 1];
+    Vector2 point = game_state->segments[i];
+    point = Vector2Subtract(point, anchor);
+    point = Vector2Normalize(point);
+    point = Vector2Scale(point, distance);
+    point = Vector2Add(point, anchor);
+    game_state->segments[i] = point;
+    DrawCircleV(point, radius, color);
+  }
+
+  // Vector2 p0 = Vector2Add(anchor, dir);
+  // p0 = Vector2Subtract(p0, anchor);
+  // p0 = Vector2Scale(Vector2Normalize(p0), distance);
+  // p0 = Vector2Add(p0, anchor);
+  //
+  // Vector2 p1 = Vector2Add(p0, dir);
+  // p1 = Vector2Subtract(p1, p0);
+  // p1 = Vector2Scale(Vector2Normalize(p1), distance);
+  // p1 = Vector2Add(p1, anchor);
+  //
+  // DrawCircleV(anchor, radius, color);
+  // DrawCircleV(p0, radius, color);
+  // DrawLineV(anchor, p0, color);
+  // DrawCircleV(p1, radius, color);
+
+  // Vector2 origin = (Vector2){player->pos.x,
+  //                            player->pos.y - (player->size.y / 2.0f) +
+  //                            radius};
+  // Vector2 p0 = Vector2Subtract((Vector2){origin.x, origin.y + 20}, dir);
+  // Vector2 constraint = Vector2Normalize(Vector2Subtract(p0, origin));
+  // constraint = Vector2Add(Vector2Scale(constraint, 15), origin);
+  // // print_vector(p0);
+  // // print_vector(constraint);
+  //
+  // DrawCircleV(origin, radius, color);
+  // DrawCircleV(constraint, radius, color);
 
   EndMode2D();
 

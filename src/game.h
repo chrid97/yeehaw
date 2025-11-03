@@ -58,6 +58,7 @@ typedef struct {
   float accumulator;
 
   Camera2D camera;
+  Vector2 segments[10];
 } GameState;
 
 void game_update_and_render(Memory *memory, GameInput *game_input);
