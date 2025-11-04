@@ -1,8 +1,6 @@
 // ---------- MECHANICS TODO -------------
 // (TODO) Move to units for time and world pos
-// (TODO) Add fixed time step
 // (TODO)  Horse movement
-// (TODO) Setup Camera
 // - flip camera y
 //
 // (TODO) Hazards
@@ -49,24 +47,6 @@ void draw_player(Entity *player, float scale) {
   Vector2 origin = {player->size.x / 2.0f, player->size.y / 2.0f};
   DrawRectanglePro(scale_rect(&rect, scale), Vector2Scale(origin, scale),
                    player->angle, player->color);
-
-  // float width = player->size.x / 2.0f;
-  // float height = player->size.y / 2.0f;
-  // Rectangle head_rect = {player->pos.x, player->pos.y - 36,
-  //                        player->size.x / 1.5f, player->size.y / 2.0f};
-
-  // Vector2 head_origin = {head_rect.width / 2.0f, head_rect.height / 2.0f};
-  // DrawRectanglePro(scale_rect(&head_rect, scale),
-  //                  Vector2Scale(head_origin, scale), player->head_angle,
-  //                  BROWN);
-  // DrawRectangleRounded(scale_rect(&head_rect, scale), 1, 10, BROWN);
-
-  // Draw this to show what direction the player is facing
-  float radians = (player->angle + 90) * DEG2RAD;
-  Vector2 forward = {cosf(radians), sinf(radians)};
-  Vector2 face_pos =
-      Vector2Add(player->pos, Vector2Scale(forward, player->size.y / -3.0f));
-  // DrawCircle(face_pos.x * scale, face_pos.y * scale, 2 * scale, BROWN);
 }
 
 // (NOTE) maybe I can get rid of this
@@ -118,7 +98,7 @@ void game_update_and_render(Memory *memory, GameInput *input) {
     game_state->camera.target = game_state->player.pos;
     game_state->camera.offset =
         (Vector2){input->screen_width / 2.0f, input->screen_height / 2.0f};
-    game_state->camera.zoom = 1;
+    game_state->camera.zoom = 0.5;
     game_state->camera.rotation = 0;
 
     memory->initalized = true;
@@ -185,63 +165,31 @@ void game_update_and_render(Memory *memory, GameInput *input) {
   DrawRectangle(0, 0, 100, 100, RED);
 
   draw_player(player, 1);
-  const int TOTAL_SEGMENTS = 5;
-  const int HORSE_SEGMENTS = player->size.y / TOTAL_SEGMENTS;
 
-  const int SPACING = 10;
-  const int RADIUS = 5;
-
-  int distance = 20;
-  Vector2 dir = {cosf((player->angle) * DEG2RAD),
-                 sinf((player->angle) * DEG2RAD)};
-  dir = (Vector2Scale(dir, 10));
-
-  int radius = 5;
-  Color color = RED;
-  Vector2 anchor =
-      Vector2Subtract(player->pos, (Vector2){0, player->size.y / 2.0f});
-  anchor = Vector2Add(dir, anchor);
-
-  // game_state->segments[0] = GetScreenToWorld2D(GetMousePosition(),
-  // game_state->camera);
-  game_state->segments[0] = anchor;
-  for (int i = 1; i < 5; i++) {
-    Vector2 anchor = game_state->segments[i - 1];
-    Vector2 point = game_state->segments[i];
-    point = Vector2Subtract(point, anchor);
-    point = Vector2Normalize(point);
-    point = Vector2Scale(point, distance);
-    point = Vector2Add(point, anchor);
-    game_state->segments[i] = point;
-    DrawCircleV(point, radius, color);
-  }
-
-  // Vector2 p0 = Vector2Add(anchor, dir);
-  // p0 = Vector2Subtract(p0, anchor);
-  // p0 = Vector2Scale(Vector2Normalize(p0), distance);
-  // p0 = Vector2Add(p0, anchor);
-  //
-  // Vector2 p1 = Vector2Add(p0, dir);
-  // p1 = Vector2Subtract(p1, p0);
-  // p1 = Vector2Scale(Vector2Normalize(p1), distance);
-  // p1 = Vector2Add(p1, anchor);
-  //
-  // DrawCircleV(anchor, radius, color);
-  // DrawCircleV(p0, radius, color);
-  // DrawLineV(anchor, p0, color);
-  // DrawCircleV(p1, radius, color);
-
-  // Vector2 origin = (Vector2){player->pos.x,
-  //                            player->pos.y - (player->size.y / 2.0f) +
-  //                            radius};
-  // Vector2 p0 = Vector2Subtract((Vector2){origin.x, origin.y + 20}, dir);
-  // Vector2 constraint = Vector2Normalize(Vector2Subtract(p0, origin));
-  // constraint = Vector2Add(Vector2Scale(constraint, 15), origin);
-  // // print_vector(p0);
-  // // print_vector(constraint);
-  //
-  // DrawCircleV(origin, radius, color);
-  // DrawCircleV(constraint, radius, color);
+  // int distance = 20;
+  // Vector2 dir = {cosf((player->angle + 90) * DEG2RAD),
+  //                sinf((player->angle + 90) * DEG2RAD)};
+  // Vector2 back_dir = Vector2Negate(dir);
+  // Vector2 anchor =
+  //     Vector2Add(player->pos, Vector2Scale(dir, -player->size.y / 2.0f));
+  // int radius = 5;
+  // Color color = RED;
+  // game_state->segments[0] = anchor;
+  // // game_state->segments[0] =
+  // //     GetScreenToWorld2D(GetMousePosition(), game_state->camera);
+  // DrawCircleV(game_state->segments[0], radius, color);
+  // for (int i = 1; i < 5; i++) {
+  //   Vector2 anchor = game_state->segments[i - 1];
+  //   Vector2 point = game_state->segments[i];
+  //   point = Vector2Subtract(point, anchor);
+  //   point = Vector2Normalize(point);
+  //   point = Vector2Scale(point, distance);
+  //   point = Vector2Add(point, anchor);
+  //   game_state->segments[i] = point;
+  //   DrawCircleV(point, radius, color);
+  // }
+  // DrawLineV(anchor, Vector2Add(anchor, Vector2Scale(dir, 50)), BLUE);
+  // DrawLineV(anchor, Vector2Add(anchor, Vector2Scale(back_dir, 50)), GREEN);
 
   EndMode2D();
 
