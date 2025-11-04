@@ -21,10 +21,10 @@
 typedef void (*GameUpdateAndRender)(Memory *memory, GameInput *game_input);
 
 void collect_input(GameInput *input) {
-  input->move_up = IsKeyDown(KEY_W);
-  input->move_down = IsKeyDown(KEY_S);
-  input->move_left = IsKeyDown(KEY_A);
-  input->move_right = IsKeyDown(KEY_D);
+  input->move_up = IsKeyDown(KEY_W) || IsKeyDown(KEY_UP);
+  input->move_down = IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN);
+  input->move_left = IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT);
+  input->move_right = IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT);
   input->reload = IsKeyPressed(KEY_R);
   input->mute = IsKeyPressed(KEY_M);
 
