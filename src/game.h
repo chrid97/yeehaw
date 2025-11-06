@@ -20,10 +20,7 @@
 // -------------------------------------
 // Enums
 // -------------------------------------
-typedef enum {
-  ENTITY_NONE = 0,
-  ENTITY_PLAYER,
-} EntityType;
+typedef enum { ENTITY_NONE = 0, ENTITY_PLAYER, ENTITY_WALL } EntityType;
 
 // -------------------------------------
 // Structs
@@ -49,8 +46,8 @@ typedef struct {
 } Entity;
 
 typedef struct {
-  // Entity entities[MAX_ENTITIES];
-  // int entity_count;
+  Entity entities[MAX_ENTITIES];
+  int entity_count;
   // Entity *draw_list[MAX_ENTITIES];
   Entity player;
 

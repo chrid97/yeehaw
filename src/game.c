@@ -29,6 +29,22 @@ static inline void print_vector(Vector2 v) {
   printf("(x: %f, y: %f)\n", v.x, v.y);
 }
 
+Entity *add_entity(GameState *game_state) {
+  int index = game_state->entity_count++;
+  game_state->entities[index] = (Entity){
+      .type = ENTITY_NONE,
+      .size = {0},
+      .pos = {0},
+      .vel = {0},
+      .angle = 0,
+      .angular_vel = 0,
+      .head_angle = 0,
+      .color = PURPLE,
+  };
+
+  return &game_state->entities[index];
+}
+
 /// Draw text starting from the right edge of the screen
 void draw_text_right_aligned_screen(const char *text, float y, int font_size,
                                     float scale) {
@@ -82,6 +98,7 @@ void game_update_and_render(Memory *memory, GameInput *input) {
 
   if (!memory->initalized) {
     game_state->accumulator = 0;
+    game_state->entity_count = 0;
 
     memset(game_state->segments, 0, sizeof(game_state->segments));
 
@@ -92,16 +109,24 @@ void game_update_and_render(Memory *memory, GameInput *input) {
         .pos = {VIRTUAL_WIDTH / 2.0f, VIRTUAL_HEIGHT / 2.0f},
         .vel = {0, 0},
         .angle = 0,
+        .angular_vel = 0,
         .head_angle = 0,
         .color = COLOR_DARK_GREY,
     };
     game_state->camera.target = game_state->player.pos;
     game_state->camera.offset =
-        (Vector2){input->screen_width / 2.0f, input->screen_height / 2.0f};
-    game_state->camera.zoom = 0.5;
+        (Vector2){input->screen_width / 2.0f, input->screen_height - 100};
+    game_state->camera.zoom = 0.45;
     game_state->camera.rotation = 0;
 
     memory->initalized = true;
+
+    for (int i = 0; i < 10; i++) {
+      Entity *entity = add_entity(game_state);
+      entity->type = ENTITY_WALL;
+      entity->size = (Vector2){50, 50};
+      entity->pos = (Vector2){VIRTUAL_WIDTH / 2.0f - (i * 10), -100 * i};
+    }
   }
 
   Entity *player = &game_state->player;
@@ -121,10 +146,10 @@ void game_update_and_render(Memory *memory, GameInput *input) {
     // -------------------------------------
     // Calculate angular acceleration & integrate
     // -------------------------------------
-    float turn_accel = 400 * turn_input;
-    float turn_drag = 10;
-    float lin_drag = 8.0f;
-    float quad_drag = 0.2f;
+    float turn_accel = 400.0f * turn_input;
+    float turn_drag = 8.0f;
+    float lin_drag = 2.0f;
+    float quad_drag = 0.1f;
 
     // (NOTE) maybe I'll want to reduce the angular acceleration at lower speed?
     float angular_acceleration = turn_accel - player->angular_vel * turn_drag;
@@ -136,20 +161,22 @@ void game_update_and_render(Memory *memory, GameInput *input) {
     // -------------------------------------
     Vector2 facing_dir = {cosf((player->angle + 90) * DEG2RAD),
                           sinf((player->angle + 90) * DEG2RAD)};
-    Vector2 dir_force = Vector2Scale(facing_dir, forward_input * 2000);
+    Vector2 dir_force = Vector2Scale(facing_dir, forward_input * 40000.0f);
     float speed = Vector2Length(player->vel);
     Vector2 drag_force =
         Vector2Add(Vector2Scale(player->vel, -lin_drag),
                    Vector2Scale(player->vel, -quad_drag * speed));
     Vector2 net_force = Vector2Add(dir_force, drag_force);
     Vector2 acceleration = Vector2Scale(net_force, 1.0f);
-    // print_vector(net_force);
 
     // -------------------------------------
     // Integrate acceleration and velocity
     // -------------------------------------
     player->vel = Vector2Add(player->vel, Vector2Scale(acceleration, dt));
     player->pos = Vector2Add(player->pos, Vector2Scale(player->vel, dt));
+    print_vector(Vector2Scale(player->vel, dt));
+    // print_float("", speed);
+    // player->pos = Vector2Add(player->pos, (Vector2){0, -10});
 
     game_state->camera.target = player->pos;
     game_state->accumulator -= FIXED_DT;
@@ -162,7 +189,17 @@ void game_update_and_render(Memory *memory, GameInput *input) {
   BeginMode2D(game_state->camera);
   ClearBackground(COLOR_SAND);
 
-  DrawRectangle(0, 0, 100, 100, RED);
+  int width = 1000;
+  for (int i = 0; i < 100; i++) {
+    DrawRectangle(VIRTUAL_WIDTH / 2.0f - width / 2.0f, VIRTUAL_HEIGHT * -i,
+                  width, 1000, BEIGE);
+    DrawRectangle(width, VIRTUAL_HEIGHT * -i, 50, 100, RED);
+  }
+
+  for (int i = 0; i < game_state->entity_count; i++) {
+    Entity *entity = &game_state->entities[i];
+    draw_entity(entity, 1);
+  }
 
   draw_player(player, 1);
 
