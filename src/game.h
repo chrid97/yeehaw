@@ -3,11 +3,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// (NOTE) PLAYING AROUND WITH DIFFENT RESOLUTIONS
+// maybe it would be cool if i could setup black bars like a western film
+// #define VIRTUAL_WIDTH 256
+// #define VIRTUAL_HEIGHT 144
+// ------------------------
 #define VIRTUAL_WIDTH 640
 #define VIRTUAL_HEIGHT 360
-
-// PLAYING AROUND WITH SMALLER RESOLUTION
-// maybe it would be cool if i could setup black bars like a western film
+// ------------------------
 // #define VIRTUAL_WIDTH 480
 // #define VIRTUAL_HEIGHT 270
 
@@ -49,7 +52,7 @@ typedef struct {
   Entity entities[MAX_ENTITIES];
   int entity_count;
   // Entity *draw_list[MAX_ENTITIES];
-  Entity player;
+  Entity *player;
 
   /// Time-step accumulator
   float accumulator;

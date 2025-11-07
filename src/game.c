@@ -1,6 +1,7 @@
 // ---------- MECHANICS TODO -------------
 // (TODO) Move to units for time and world pos
-// (TODO)  Horse movement
+// (TODO) tumbleweed - slows player
+// (TODO)
 // - flip camera y
 //
 // (TODO) Hazards
@@ -65,7 +66,6 @@ void draw_player(Entity *player, float scale) {
                    player->angle, player->color);
 }
 
-// (NOTE) maybe I can get rid of this
 void draw_entity(Entity *entity, float scale) {
   Rectangle rect = {entity->pos.x, entity->pos.y, entity->size.x,
                     entity->size.y};
@@ -75,7 +75,9 @@ void draw_entity(Entity *entity, float scale) {
 }
 
 Rectangle rect_from_entity(Entity *entity) {
-  return (Rectangle){entity->pos.x, entity->pos.y, entity->size.x,
+  // DrawRect starting from top left of sprite
+  return (Rectangle){entity->pos.x - (entity->size.x / 2.0f),
+                     entity->pos.y - (entity->size.y / 2.0f), entity->size.x,
                      entity->size.y};
 }
 
@@ -102,34 +104,62 @@ void game_update_and_render(Memory *memory, GameInput *input) {
 
     memset(game_state->segments, 0, sizeof(game_state->segments));
 
-    game_state->player = (Entity){
-        .type = ENTITY_PLAYER,
-        // .size = {18.5, 48},
-        .size = {40, 100},
-        .pos = {VIRTUAL_WIDTH / 2.0f, VIRTUAL_HEIGHT / 2.0f},
-        .vel = {0, 0},
-        .angle = 0,
-        .angular_vel = 0,
-        .head_angle = 0,
-        .color = COLOR_DARK_GREY,
-    };
-    game_state->camera.target = game_state->player.pos;
+    Entity *player = add_entity(game_state);
+    player->type = ENTITY_PLAYER,
+    // player->size = {18.5, 48},
+        player->size = (Vector2){40, 100};
+    player->pos = (Vector2){VIRTUAL_WIDTH / 2.0f, VIRTUAL_HEIGHT / 2.0f};
+    player->vel = (Vector2){0, 0};
+    player->angle = 0;
+    player->angular_vel = 0;
+    player->head_angle = 0;
+    player->color = COLOR_DARK_GREY;
+    game_state->player = player;
+
+    game_state->camera.target = player->pos;
     game_state->camera.offset =
         (Vector2){input->screen_width / 2.0f, input->screen_height - 100};
     game_state->camera.zoom = 0.45;
+    // game_state->camera.zoom = 1;
     game_state->camera.rotation = 0;
 
     memory->initalized = true;
 
-    for (int i = 0; i < 10; i++) {
-      Entity *entity = add_entity(game_state);
-      entity->type = ENTITY_WALL;
-      entity->size = (Vector2){50, 50};
-      entity->pos = (Vector2){VIRTUAL_WIDTH / 2.0f - (i * 10), -100 * i};
+    // for (int i = 0; i < 1; i++) {
+    //   Entity *entity = add_entity(game_state);
+    //   entity->type = ENTITY_WALL;
+    //   entity->size = (Vector2){100, 100};
+    //   entity->pos = (Vector2){VIRTUAL_WIDTH / 2.0f, -100 * i};
+    // }
+
+    const float tile_size = 100.0f;
+    const float center_x = VIRTUAL_WIDTH / 2.0f;
+
+    struct {
+      float x, y;
+    } tiles[] = {
+        {center_x, 0},
+        {center_x, -200},
+        {center_x - tile_size, -400},
+        {center_x + tile_size, -600},
+        {center_x, -800},
+        {center_x - tile_size * 2, -1000},
+        {center_x + tile_size * 2, -1200},
+        {center_x, -1400},
+        {center_x - tile_size, -1600},
+        {center_x + tile_size, -1800},
+    };
+
+    for (int i = 0; i < sizeof(tiles) / sizeof(tiles[0]); i++) {
+      Entity *e = add_entity(game_state);
+      e->type = ENTITY_WALL;
+      e->size = (Vector2){tile_size, tile_size};
+      e->pos = (Vector2){tiles[i].x, tiles[i].y};
+      e->color = (Color){139, 69, 19, 255}; // brownish for rock/canyon
     }
   }
 
-  Entity *player = &game_state->player;
+  Entity *player = game_state->player;
 
   if (input->reload) {
     memory->initalized = false;
@@ -139,6 +169,8 @@ void game_update_and_render(Memory *memory, GameInput *input) {
   float dt = FIXED_DT;
   game_state->accumulator += GetFrameTime();
   while (game_state->accumulator >= FIXED_DT) {
+    // (TODO) move later
+    player->color = COLOR_DARK_GREY;
 
     int turn_input = (int)input->move_right - (int)input->move_left;
     int forward_input = (int)input->move_down - (int)input->move_up;
@@ -174,12 +206,27 @@ void game_update_and_render(Memory *memory, GameInput *input) {
     // -------------------------------------
     player->vel = Vector2Add(player->vel, Vector2Scale(acceleration, dt));
     player->pos = Vector2Add(player->pos, Vector2Scale(player->vel, dt));
-    print_vector(Vector2Scale(player->vel, dt));
-    // print_float("", speed);
-    // player->pos = Vector2Add(player->pos, (Vector2){0, -10});
+    // print_vector(Vector2Scale(player->vel, dt));
 
     game_state->camera.target = player->pos;
     game_state->accumulator -= FIXED_DT;
+
+    // -------------------------------------
+    // Collision Detection
+    // -------------------------------------
+    for (int i = 0; i < game_state->entity_count; i++) {
+      Entity *e1 = &game_state->entities[i];
+
+      for (int j = i + 1; j < game_state->entity_count; j++) {
+        Entity *e2 = &game_state->entities[j];
+
+        if (CheckCollisionRecs(rect_from_entity(e1), rect_from_entity(e2))) {
+          if (e1->type == ENTITY_PLAYER || e2->type == ENTITY_PLAYER) {
+            player->color = RED;
+          }
+        }
+      }
+    }
   }
 
   // -------------------------------------
@@ -236,7 +283,6 @@ void game_update_and_render(Memory *memory, GameInput *input) {
       TextFormat("V: (x: %f, y: %f)", player->vel.x, player->vel.y);
   draw_text_right_aligned_screen(text, y_offset, font_size, scale);
   y_offset += font_size * scale;
-
   float speed = Vector2Length(player->vel);
   const char *speed_text = TextFormat("SPEED: %.1f", speed);
   draw_text_right_aligned_screen(speed_text, y_offset, font_size, scale);
